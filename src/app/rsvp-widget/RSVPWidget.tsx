@@ -43,9 +43,12 @@ export default function RSVPWidget() {
   const [phone, setPhone] = useState('')
   const [consented, setConsented] = useState(false)
   const [fieldError, setFieldError] = useState('')
+  const [hideDate, setHideDate] = useState(false)
 
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get('event')
+    const params = new URLSearchParams(window.location.search)
+    const id = params.get('event')
+    setHideDate(params.get('hideDate') === '1')
     setEventId(id)
     if (!id) { setStep('not_found'); return }
 
@@ -119,7 +122,7 @@ export default function RSVPWidget() {
     return (
       <div className="py-10 px-6 text-center space-y-3">
         <p className="text-lg font-semibold tracking-wide text-white">{event?.name}</p>
-        {event && (
+        {event && !hideDate && (
           <p className="text-white/40 text-sm">
             {formatDate(event.date)} &middot; {formatTime(event.date)}
           </p>
@@ -137,7 +140,7 @@ export default function RSVPWidget() {
     return (
       <div className="py-10 px-6 text-center space-y-4">
         <p className="text-lg font-semibold tracking-wide text-white">{event?.name}</p>
-        {event && (
+        {event && !hideDate && (
           <p className="text-white/40 text-sm">
             {formatDate(event.date)} &middot; {formatTime(event.date)}
           </p>
@@ -166,9 +169,11 @@ export default function RSVPWidget() {
       {event && (
         <div className="text-center space-y-1">
           <p className="text-lg font-semibold tracking-wide text-white">{event.name}</p>
-          <p className="text-white/40 text-sm">
-            {formatDate(event.date)} &middot; {formatTime(event.date)}
-          </p>
+          {!hideDate && (
+            <p className="text-white/40 text-sm">
+              {formatDate(event.date)} &middot; {formatTime(event.date)}
+            </p>
+          )}
           {event.description && (
             <p className="text-white/40 text-sm pt-1 leading-relaxed">{event.description}</p>
           )}
