@@ -45,9 +45,30 @@ function maskPhone(p: string) {
   return p.replace(/(\+?\d+)(\d{4})$/, (_, prefix, last4) => '*'.repeat(prefix.length) + last4)
 }
 
+// ── Copy button (reusable) ─────────────────────────────────────────────────
+function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false)
+  const handle = () => {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <button
+      onClick={handle}
+      className="text-xs text-white/30 hover:text-white/70 transition-colors flex-shrink-0"
+    >
+      {copied ? '✓ Copied' : label}
+    </button>
+  )
+}
+
 // ── Sub-components ─────────────────────────────────────────────────────────
 function EventCard({ event }: { event: Event }) {
   const [open, setOpen] = useState(false)
+  const appUrl = typeof window !== 'undefined' ? window.location.origin : ''
+  const iframeCode = `<iframe\n  src="${appUrl}/rsvp-widget?event=${event.id}"\n  title="RSVP"\n  width="100%"\n  height="520"\n  style="border:none; background:#000;"\n></iframe>`
+
   return (
     <div className="border border-white/10 rounded-sm overflow-hidden">
       <button
@@ -69,17 +90,40 @@ function EventCard({ event }: { event: Event }) {
       </button>
 
       {open && (
-        <div className="border-t border-white/10 px-4 py-3 space-y-2 bg-white/[0.02]">
-          {event.attendees.length === 0 ? (
-            <p className="text-white/30 text-xs">No RSVPs yet.</p>
-          ) : (
-            event.attendees.map((a) => (
-              <div key={a.id} className="flex items-center justify-between gap-3">
-                <p className="text-white/80 text-sm">{a.name}</p>
-                <p className="text-white/30 text-xs font-mono">{maskPhone(a.phone)}</p>
-              </div>
-            ))
-          )}
+        <div className="border-t border-white/10 px-4 py-4 space-y-4 bg-white/[0.02]">
+          {/* Attendees */}
+          <div className="space-y-2">
+            {event.attendees.length === 0 ? (
+              <p className="text-white/30 text-xs">No RSVPs yet.</p>
+            ) : (
+              event.attendees.map((a) => (
+                <div key={a.id} className="flex items-center justify-between gap-3">
+                  <p className="text-white/80 text-sm">{a.name}</p>
+                  <p className="text-white/30 text-xs font-mono">{maskPhone(a.phone)}</p>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Event ID */}
+          <div className="pt-1 border-t border-white/10 space-y-1">
+            <p className="text-xs uppercase tracking-widest text-white/20">Event ID</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-white/40 text-xs font-mono break-all">{event.id}</p>
+              <CopyButton text={event.id} label="Copy ID" />
+            </div>
+          </div>
+
+          {/* iframe code */}
+          <div className="border-t border-white/10 pt-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase tracking-widest text-white/20">Squarespace iframe</p>
+              <CopyButton text={iframeCode} label="Copy iframe" />
+            </div>
+            <pre className="text-xs text-white/40 font-mono bg-black/40 border border-white/10 rounded-sm px-3 py-2 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
+              {iframeCode}
+            </pre>
+          </div>
         </div>
       )}
     </div>
@@ -143,6 +187,8 @@ export default function AdminPage() {
   const [addingEvent, setAddingEvent] = useState(false)
   const [addEventError, setAddEventError] = useState('')
   const [addEventSuccess, setAddEventSuccess] = useState('')
+  const [newEventId, setNewEventId] = useState('')
+  const [newEventIframe, setNewEventIframe] = useState('')
 
   const fetchEvents = useCallback(async () => {
     setLoadingEvents(true)
@@ -223,7 +269,11 @@ export default function AdminPage() {
       if (!res.ok) {
         setAddEventError(data.error ?? 'Failed to create event.')
       } else {
-        setAddEventSuccess(`Event "${data.name}" created. Copy its ID: ${data.id}`)
+        const origin = window.location.origin
+        const iframe = `<iframe\n  src="${origin}/rsvp-widget?event=${data.id}"\n  title="RSVP"\n  width="100%"\n  height="520"\n  style="border:none; background:#000;"\n></iframe>`
+        setAddEventSuccess(`Event "${data.name}" created.`)
+        setNewEventId(data.id)
+        setNewEventIframe(iframe)
         setEvName(''); setEvDate(''); setEvDesc(''); setEvFlyer('')
         fetchEvents()
       }
@@ -457,8 +507,28 @@ export default function AdminPage() {
             {addEventError && <p className="text-red-400 text-xs">{addEventError}</p>}
 
             {addEventSuccess && (
-              <div className="border border-white/10 rounded-sm px-4 py-3">
-                <p className="text-white/80 text-xs leading-relaxed">{addEventSuccess}</p>
+              <div className="border border-white/10 rounded-sm px-4 py-4 space-y-4">
+                <p className="text-white text-sm font-medium">{addEventSuccess}</p>
+
+                {/* Event ID */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs uppercase tracking-widest text-white/30">Event ID</p>
+                    <CopyButton text={newEventId} label="Copy ID" />
+                  </div>
+                  <p className="text-white/50 text-xs font-mono break-all">{newEventId}</p>
+                </div>
+
+                {/* iframe code */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs uppercase tracking-widest text-white/30">Squarespace iframe</p>
+                    <CopyButton text={newEventIframe} label="Copy iframe" />
+                  </div>
+                  <pre className="text-xs text-white/40 font-mono bg-black/40 border border-white/10 rounded-sm px-3 py-2 overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
+                    {newEventIframe}
+                  </pre>
+                </div>
               </div>
             )}
 
