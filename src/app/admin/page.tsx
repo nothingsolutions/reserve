@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type Attendee = { id: string; name: string; phone: string; created_at: string }
@@ -248,12 +249,20 @@ export default function AdminPage() {
           <p className="text-xs uppercase tracking-widest text-white/30">Nothing Radio</p>
           <h1 className="text-base font-semibold text-white">RSVP Admin</h1>
         </div>
-        <button
-          onClick={handleLogout}
-          className="text-xs text-white/30 hover:text-white/70 transition-colors uppercase tracking-widest"
-        >
-          Sign out
-        </button>
+        <div className="flex items-center gap-4">
+          <Link
+            href="/admin/how-to"
+            className="text-xs text-white/30 hover:text-white/70 transition-colors uppercase tracking-widest"
+          >
+            How To
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="text-xs text-white/30 hover:text-white/70 transition-colors uppercase tracking-widest"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
