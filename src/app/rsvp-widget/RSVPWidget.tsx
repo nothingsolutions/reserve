@@ -225,8 +225,10 @@ export default function RSVPWidget() {
             className="mt-0.5 h-4 w-4 flex-shrink-0 accent-white cursor-pointer"
           />
           <label htmlFor="rsvp-consent" className="text-xs text-white/40 leading-relaxed cursor-pointer">
-            By submitting, you agree to receive event updates and reminders at this number.
-            Message &amp; data rates may apply. Reply STOP to opt out at any time.
+            By submitting, you agree to receive updates and reminders via SMS. Msg &amp; data rates may apply. Reply STOP to opt out at any time.{' '}
+            <a href="https://nothingradio.com/tos" target="_blank" rel="noopener noreferrer" className="text-white/30 underline underline-offset-2 hover:text-white/50 transition-colors">Terms</a>
+            {' '}&amp;{' '}
+            <a href="https://nothingradio.com/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-white/30 underline underline-offset-2 hover:text-white/50 transition-colors">Privacy</a>.
           </label>
         </div>
 
