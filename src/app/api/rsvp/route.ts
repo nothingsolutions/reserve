@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { sendSMS } from '@/lib/twilio'
 import { rateLimit } from '@/lib/rate-limit'
 
-function normalizePhone(raw: string): string | null {
+export function normalizePhone(raw: string): string | null {
   const digits = raw.replace(/\D/g, '')
   if (digits.length === 10) return `+1${digits}`
   if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
@@ -30,7 +30,8 @@ export async function POST(req: NextRequest) {
 
   const { name, phone, eventId, consented } = body
 
-  if (!name?.trim() || !phone?.trim() || !eventId || !consented) {
+  // name is now optional — phone, eventId, and consent are required
+  if (!phone?.trim() || !eventId || !consented) {
     return NextResponse.json({ error: 'All fields are required.' }, { status: 400 })
   }
 
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid phone number.' }, { status: 400 })
   }
 
-  const trimmedName = name.trim().slice(0, 100)
+  const trimmedName = (name ?? '').trim().slice(0, 100)
 
   // Fetch event details (needed for SMS copy)
   const { data: event, error: eventError } = await supabase()
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Event not found.' }, { status: 404 })
   }
 
-  // Check for existing RSVP (idempotent — don't double-register)
+  // Check for existing RSVP for this event (idempotent — don't double-register)
   const { data: existing } = await supabase()
     .from('rsvps')
     .select('id')
@@ -73,10 +74,22 @@ export async function POST(req: NextRequest) {
   })
 
   if (insertError) {
-    // Log only the error code, not the full message which could contain PII
     console.error('RSVP insert failed:', insertError.code)
     return NextResponse.json({ error: 'Could not save your RSVP. Please try again.' }, { status: 500 })
   }
+
+  // Check if this phone has a non-empty name on any other event (returning attendee)
+  // Only the boolean is returned — the name itself is never sent to the client.
+  const { data: prior } = await supabase()
+    .from('rsvps')
+    .select('id')
+    .eq('phone', normalizedPhone)
+    .neq('event_id', eventId)
+    .not('name', 'eq', '')
+    .limit(1)
+    .maybeSingle()
+
+  const returning = !!prior
 
   // Send confirmation SMS (non-fatal if it fails — RSVP is already stored)
   const eventDate = new Date(event.date).toLocaleDateString('en-US', {
@@ -92,5 +105,5 @@ export async function POST(req: NextRequest) {
     console.error('Confirmation SMS failed:', (err as Error).message?.slice(0, 80))
   }
 
-  return NextResponse.json({ status: 'confirmed' })
+  return NextResponse.json({ status: 'confirmed', returning })
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 
-// ── Country data ────────────────────────────────────────────────────────────
+// ── Country data ─────────────────────────────────────────────────────────────
 type Country = { flag: string; name: string; dial: string; code: string; placeholder: string }
 
 const COUNTRIES: Country[] = [
@@ -72,7 +72,7 @@ interface RSVPWidgetProps {
   subtitle?: string
 }
 
-// ── Phone formatting ─────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function formatPhone(raw: string, dial: string): string {
   const v = raw.replace(/\D/g, '')
   if (dial === '+1') {
@@ -83,6 +83,11 @@ function formatPhone(raw: string, dial: string): string {
     return ''
   }
   return v.slice(0, 12)
+}
+
+function isPhoneComplete(value: string, dial: string): boolean {
+  const digits = value.replace(/\D/g, '')
+  return dial === '+1' ? digits.length === 10 : digits.length >= 6
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -99,11 +104,13 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
   const [searchQuery, setSearchQuery] = useState('')
   const [highlightIndex, setHighlightIndex] = useState(-1)
   const [phoneError, setPhoneError] = useState(false)
-
-  // Name step
-  const [nameValue, setNameValue] = useState('')
+  const [phoneApiError, setPhoneApiError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [apiError, setApiError] = useState('')
+
+  // Name step — store the clean phone sent to API so PATCH can reuse it
+  const [nameValue, setNameValue] = useState('')
+  const [cleanPhone, setCleanPhone] = useState('')
+  const [nameSaving, setNameSaving] = useState(false)
 
   // Refs
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -149,16 +156,12 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
 
   // ── Focus search when dropdown opens ─────────────────────────────────────
   useEffect(() => {
-    if (dropdownOpen) {
-      setTimeout(() => searchRef.current?.focus(), 50)
-    }
+    if (dropdownOpen) setTimeout(() => searchRef.current?.focus(), 50)
   }, [dropdownOpen])
 
   // ── Focus name input when entering name step ──────────────────────────────
   useEffect(() => {
-    if (step === 'name-entry') {
-      setTimeout(() => nameRef.current?.focus(), 350)
-    }
+    if (step === 'name-entry') setTimeout(() => nameRef.current?.focus(), 350)
   }, [step])
 
   // ── Handlers ─────────────────────────────────────────────────────────────
@@ -194,43 +197,77 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
     }
   }, [filteredCountries, highlightIndex, selectCountry])
 
-  const handleRSVP = useCallback(() => {
-    if (!phoneValue.trim()) {
+  // API fires here — at RSVP button click
+  const handleRSVP = useCallback(async () => {
+    if (submitting) return
+    setPhoneApiError('')
+
+    if (!isPhoneComplete(phoneValue, selectedCountry.dial)) {
       setPhoneError(true)
       setTimeout(() => setPhoneError(false), 1200)
       return
     }
-    setStep('name-entry')
-  }, [phoneValue])
 
-  const handleSubmitName = useCallback(async () => {
-    if (submitting) return
-    setApiError('')
     setSubmitting(true)
 
-    const fullPhone = `${selectedCountry.dial} ${phoneValue}`
+    // Send clean dial+digits — no formatting characters
+    const digitsOnly = phoneValue.replace(/\D/g, '')
+    const fullPhone = `${selectedCountry.dial}${digitsOnly}`
+    setCleanPhone(fullPhone)
 
     try {
       const res = await fetch('/api/rsvp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: nameValue.trim() || 'Guest', phone: fullPhone, eventId, consented: true }),
+        body: JSON.stringify({ name: '', phone: fullPhone, eventId, consented: true }),
       })
       const data = await res.json()
 
       if (data.status === 'already_registered') {
         setStep('already_registered')
       } else if (!res.ok) {
-        setApiError(data.error ?? 'Something went wrong. Please try again.')
-      } else {
+        setPhoneApiError(data.error ?? 'Something went wrong. Please try again.')
+      } else if (data.returning === true) {
+        // Returning attendee — we already have their name, skip the name step
         setStep('done')
+      } else {
+        // New person — ask for name (optional)
+        setStep('name-entry')
       }
     } catch {
-      setApiError('Network error. Please try again.')
+      setPhoneApiError('Network error. Please try again.')
     } finally {
       setSubmitting(false)
     }
-  }, [submitting, selectedCountry.dial, phoneValue, nameValue, eventId])
+  }, [submitting, phoneValue, selectedCountry, eventId])
+
+  // Name is optional — PATCH only if they typed something
+  const handleSubmitName = useCallback(async () => {
+    if (nameSaving) return
+    const trimmed = nameValue.trim()
+
+    if (!trimmed) {
+      // No name typed — skip to done without a PATCH
+      setStep('done')
+      return
+    }
+
+    setNameSaving(true)
+    try {
+      await fetch('/api/rsvp/name', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: cleanPhone, eventId, name: trimmed }),
+      })
+    } catch {
+      // Non-fatal — RSVP is already saved
+    } finally {
+      setNameSaving(false)
+    }
+    setStep('done')
+  }, [nameSaving, nameValue, cleanPhone, eventId])
+
+  const handleSkipName = useCallback(() => setStep('done'), [])
 
   // ── Computed title fields ────────────────────────────────────────────────
   const eyebrowText = eyebrowProp ?? (event ? new Date(event.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '')
@@ -305,9 +342,7 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
           </div>
           <p style={{ fontFamily: "'Helvetica Neue', 'Arial Narrow', sans-serif", fontStretch: 'condensed', fontWeight: 700, fontSize: 32, color: '#fff', marginBottom: 6 }}>You&apos;re in.</p>
           <p style={{ fontSize: 14, color: '#666' }}>
-            {nameValue.trim()
-              ? `We'll hit you when it's time, ${nameValue.trim()}.`
-              : "We'll hit you when it's time."}
+            {nameValue.trim() ? `We'll hit you when it's time, ${nameValue.trim()}.` : "We'll hit you when it's time."}
           </p>
         </div>
         <style>{`@keyframes slideUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }`}</style>
@@ -334,14 +369,14 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
           style={{
             display: 'flex', alignItems: 'center',
             background: '#181818',
-            border: `1px solid ${apiError ? 'rgba(255,71,71,0.6)' : 'rgba(255,255,255,0.08)'}`,
+            border: '1px solid rgba(255,255,255,0.08)',
             borderRadius: 100,
             padding: '5px 5px 5px 18px',
             transition: 'border-color 0.2s, box-shadow 0.2s, background 0.2s',
             animation: 'slideUp 0.4s cubic-bezier(0.16,1,0.3,1) 0.1s both',
           }}
-          onFocus={(e) => { (e.currentTarget as HTMLDivElement).style.background = '#212121'; (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.3)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 0 0 3px rgba(255,255,255,0.06)' }}
-          onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) { (e.currentTarget as HTMLDivElement).style.background = '#181818'; (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.08)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none' } }}
+          onFocus={e => { (e.currentTarget as HTMLDivElement).style.background = '#212121'; (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.3)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 0 0 3px rgba(255,255,255,0.06)' }}
+          onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) { (e.currentTarget as HTMLDivElement).style.background = '#181818'; (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.08)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none' } }}
         >
           <input
             ref={nameRef}
@@ -355,24 +390,30 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
           />
           <button
             onClick={handleSubmitName}
-            disabled={submitting}
+            disabled={nameSaving}
             style={{
-              flexShrink: 0, background: submitting ? 'rgba(255,255,255,0.5)' : '#fff', color: '#000',
+              flexShrink: 0, background: nameSaving ? 'rgba(255,255,255,0.5)' : '#fff', color: '#000',
               border: 'none', borderRadius: 100, padding: '12px 22px',
               fontFamily: "'Helvetica Neue', 'Arial Narrow', sans-serif", fontStretch: 'condensed', fontSize: 13, fontWeight: 700,
-              letterSpacing: '0.1em', textTransform: 'uppercase', cursor: submitting ? 'not-allowed' : 'pointer',
+              letterSpacing: '0.1em', textTransform: 'uppercase', cursor: nameSaving ? 'not-allowed' : 'pointer',
               transition: 'transform 0.15s ease, box-shadow 0.15s ease',
             }}
-            onMouseEnter={e => { if (!submitting) { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.03)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 20px rgba(255,255,255,0.2)' } }}
+            onMouseEnter={e => { if (!nameSaving) { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.03)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 20px rgba(255,255,255,0.2)' } }}
             onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = ''; (e.currentTarget as HTMLButtonElement).style.boxShadow = '' }}
           >
-            {submitting ? '…' : 'Done'}
+            {nameSaving ? '…' : 'Done'}
           </button>
         </div>
 
-        {apiError && (
-          <p style={{ marginTop: 10, fontSize: 12, color: '#ff6b6b', textAlign: 'center' }}>{apiError}</p>
-        )}
+        {/* Skip link */}
+        <div style={{ textAlign: 'center', marginTop: 14 }}>
+          <button
+            onClick={handleSkipName}
+            style={{ background: 'none', border: 'none', color: '#444', fontSize: 12, cursor: 'pointer', padding: '4px 8px', fontFamily: "'DM Sans', sans-serif", textDecoration: 'underline', textUnderlineOffset: 2 }}
+          >
+            Skip
+          </button>
+        </div>
 
         <style>{`
           @keyframes slideUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
@@ -509,21 +550,31 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
         <button
           type="button"
           onClick={handleRSVP}
+          disabled={submitting}
           style={{
-            flexShrink: 0, background: '#fff', color: '#000',
+            flexShrink: 0, background: submitting ? 'rgba(255,255,255,0.7)' : '#fff', color: '#000',
             border: 'none', borderRadius: 100, padding: '12px 22px',
             fontFamily: "'Helvetica Neue', 'Arial Narrow', sans-serif", fontStretch: 'condensed', fontSize: 13, fontWeight: 700,
-            letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+            letterSpacing: '0.1em', textTransform: 'uppercase', cursor: submitting ? 'not-allowed' : 'pointer',
             transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+            display: 'flex', alignItems: 'center', gap: 6,
           }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.03)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 20px rgba(255,255,255,0.2)' }}
+          onMouseEnter={e => { if (!submitting) { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.03)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 20px rgba(255,255,255,0.2)' } }}
           onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = ''; (e.currentTarget as HTMLButtonElement).style.boxShadow = '' }}
-          onMouseDown={e => (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.97)'}
-          onMouseUp={e => (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.03)'}
+          onMouseDown={e => { if (!submitting) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.97)' }}
+          onMouseUp={e => { if (!submitting) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.03)' }}
         >
-          RSVP
+          {submitting && (
+            <span style={{ width: 12, height: 12, border: '2px solid rgba(0,0,0,0.3)', borderTopColor: '#000', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
+          )}
+          {submitting ? 'Saving…' : 'RSVP'}
         </button>
       </div>
+
+      {/* API error below input row */}
+      {phoneApiError && (
+        <p style={{ marginTop: 10, fontSize: 12, color: '#ff6b6b', paddingLeft: 4 }}>{phoneApiError}</p>
+      )}
 
       {/* Consent */}
       <div style={{ marginTop: 14, fontSize: 11, color: '#444', lineHeight: 1.6, animation: 'slideUp 0.6s cubic-bezier(0.16,1,0.3,1) 0.25s both', fontFamily: "'DM Sans', sans-serif" }}>
@@ -536,6 +587,7 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
       <style>{`
         @keyframes slideUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
         @keyframes dropIn { from { opacity:0; transform:translateY(-6px) scale(0.98); } to { opacity:1; transform:translateY(0) scale(1); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
     </div>
   )
