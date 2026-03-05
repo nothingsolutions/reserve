@@ -105,6 +105,8 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
   const [highlightIndex, setHighlightIndex] = useState(-1)
   const [phoneError, setPhoneError] = useState(false)
   const [phoneApiError, setPhoneApiError] = useState('')
+  const [consented, setConsented] = useState(false)
+  const [consentError, setConsentError] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   // Name step — store the clean phone sent to API so PATCH can reuse it
@@ -202,6 +204,12 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
     if (submitting) return
     setPhoneApiError('')
 
+    if (!consented) {
+      setConsentError(true)
+      setTimeout(() => setConsentError(false), 1400)
+      return
+    }
+
     if (!isPhoneComplete(phoneValue, selectedCountry.dial)) {
       setPhoneError(true)
       setTimeout(() => setPhoneError(false), 1200)
@@ -219,7 +227,7 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
       const res = await fetch('/api/rsvp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: '', phone: fullPhone, eventId, consented: true }),
+        body: JSON.stringify({ name: '', phone: fullPhone, eventId, consented }),
       })
       const data = await res.json()
 
@@ -576,13 +584,45 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
         <p style={{ marginTop: 10, fontSize: 12, color: '#ff6b6b', paddingLeft: 4 }}>{phoneApiError}</p>
       )}
 
-      {/* Consent */}
-      <div style={{ marginTop: 14, fontSize: 11, color: '#444', lineHeight: 1.6, animation: 'slideUp 0.6s cubic-bezier(0.16,1,0.3,1) 0.25s both', fontFamily: "'DM Sans', sans-serif" }}>
-        By submitting, you agree to receive updates and reminders via SMS. Msg &amp; data rates may apply. Reply STOP to opt out at any time.{' '}
-        <a href="https://nothingradio.com/tos" target="_blank" rel="noopener noreferrer" style={{ color: '#666', textDecoration: 'underline', textUnderlineOffset: 2 }}>Terms</a>
-        {' '}&amp;{' '}
-        <a href="https://nothingradio.com/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: '#666', textDecoration: 'underline', textUnderlineOffset: 2 }}>Privacy</a>.
-      </div>
+      {/* Consent checkbox */}
+      <label
+        style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+          marginTop: 14, cursor: 'pointer',
+          animation: 'slideUp 0.6s cubic-bezier(0.16,1,0.3,1) 0.25s both',
+          fontFamily: "'DM Sans', sans-serif",
+        }}
+      >
+        {/* Custom checkbox */}
+        <span
+          onClick={() => setConsented(v => !v)}
+          style={{
+            flexShrink: 0,
+            marginTop: 1,
+            width: 16, height: 16,
+            borderRadius: 4,
+            border: `1.5px solid ${consentError ? 'rgba(255,71,71,0.7)' : consented ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.2)'}`,
+            background: consented ? '#fff' : 'transparent',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'border-color 0.2s, background 0.2s',
+          }}
+        >
+          {consented && (
+            <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
+              <polyline points="1,3.5 3.5,6 8,1" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          )}
+        </span>
+        <span
+          onClick={() => setConsented(v => !v)}
+          style={{ fontSize: 11, color: consentError ? 'rgba(255,100,100,0.8)' : '#444', lineHeight: 1.6, transition: 'color 0.2s' }}
+        >
+          I agree to receive updates and reminders via SMS. Msg &amp; data rates may apply. Reply STOP to opt out.{' '}
+          <a href="https://nothingradio.com/tos" target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: consentError ? 'rgba(255,100,100,0.6)' : '#666', textDecoration: 'underline', textUnderlineOffset: 2 }}>Terms</a>
+          {' '}&amp;{' '}
+          <a href="https://nothingradio.com/privacy-policy" target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: consentError ? 'rgba(255,100,100,0.6)' : '#666', textDecoration: 'underline', textUnderlineOffset: 2 }}>Privacy</a>.
+        </span>
+      </label>
 
       <style>{`
         @keyframes slideUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
