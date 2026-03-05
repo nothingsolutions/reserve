@@ -282,10 +282,9 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
         </div>
       )}
       {mainTitleText && (
-        <div
-          style={{ fontFamily: "'Helvetica Neue', 'Arial Narrow', sans-serif", fontStretch: 'condensed', fontWeight: 700, fontSize: 52, lineHeight: 0.95, color: '#fff', letterSpacing: '0.02em', textTransform: 'uppercase' }}
-          dangerouslySetInnerHTML={{ __html: mainTitleText.replace(' ', '<br>') }}
-        />
+        <div style={{ fontFamily: "'Helvetica Neue', 'Arial Narrow', sans-serif", fontStretch: 'condensed', fontWeight: 700, fontSize: 40, lineHeight: 1, color: '#fff', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+          {mainTitleText}
+        </div>
       )}
       {subtitleText && (
         <div style={{ marginTop: 10, fontSize: 14, color: '#666' }}>{subtitleText}</div>

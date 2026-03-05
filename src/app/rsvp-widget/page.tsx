@@ -2,7 +2,7 @@ import RSVPWidget from './RSVPWidget'
 
 export default function RSVPWidgetPage() {
   return (
-    <div style={{ background: '#080808', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' }}>
+    <div style={{ background: '#000000', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' }}>
       {/* Background glow */}
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
         <div style={{
@@ -15,7 +15,7 @@ export default function RSVPWidgetPage() {
       </div>
 
       {/* Card */}
-      <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 440, margin: 24, background: '#111111', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20, padding: '36px 32px 28px' }}>
+      <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 440, margin: 24, background: '#000000', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20, padding: '36px 32px 28px' }}>
         <RSVPWidget />
       </div>
 
