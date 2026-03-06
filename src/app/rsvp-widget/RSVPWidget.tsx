@@ -105,6 +105,7 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
   const [highlightIndex, setHighlightIndex] = useState(-1)
   const [phoneError, setPhoneError] = useState(false)
   const [phoneApiError, setPhoneApiError] = useState('')
+  const [consented, setConsented] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   // Name step — store the clean phone sent to API so PATCH can reuse it
@@ -550,19 +551,19 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
         <button
           type="button"
           onClick={handleRSVP}
-          disabled={submitting}
+          disabled={submitting || !consented}
           style={{
-            flexShrink: 0, background: submitting ? 'rgba(255,255,255,0.7)' : '#fff', color: '#000',
+            flexShrink: 0, background: (submitting || !consented) ? 'rgba(255,255,255,0.35)' : '#fff', color: '#000',
             border: 'none', borderRadius: 100, padding: '12px 22px',
             fontFamily: "'Helvetica Neue', 'Arial Narrow', sans-serif", fontStretch: 'condensed', fontSize: 13, fontWeight: 700,
-            letterSpacing: '0.1em', textTransform: 'uppercase', cursor: submitting ? 'not-allowed' : 'pointer',
-            transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+            letterSpacing: '0.1em', textTransform: 'uppercase', cursor: (submitting || !consented) ? 'not-allowed' : 'pointer',
+            transition: 'transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease',
             display: 'flex', alignItems: 'center', gap: 6,
           }}
-          onMouseEnter={e => { if (!submitting) { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.03)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 20px rgba(255,255,255,0.2)' } }}
+          onMouseEnter={e => { if (!submitting && consented) { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.03)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 20px rgba(255,255,255,0.2)' } }}
           onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = ''; (e.currentTarget as HTMLButtonElement).style.boxShadow = '' }}
-          onMouseDown={e => { if (!submitting) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.97)' }}
-          onMouseUp={e => { if (!submitting) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.03)' }}
+          onMouseDown={e => { if (!submitting && consented) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.97)' }}
+          onMouseUp={e => { if (!submitting && consented) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.03)' }}
         >
           {submitting && (
             <span style={{ width: 12, height: 12, border: '2px solid rgba(0,0,0,0.3)', borderTopColor: '#000', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
@@ -576,13 +577,40 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
         <p style={{ marginTop: 10, fontSize: 12, color: '#ff6b6b', paddingLeft: 4 }}>{phoneApiError}</p>
       )}
 
-      {/* Consent */}
-      <div style={{ marginTop: 14, fontSize: 11, color: '#444', lineHeight: 1.6, animation: 'slideUp 0.6s cubic-bezier(0.16,1,0.3,1) 0.25s both', fontFamily: "'DM Sans', sans-serif" }}>
-        By submitting, you agree to receive updates and reminders via SMS. Msg &amp; data rates may apply. Reply STOP to opt out at any time.{' '}
-        <a href="https://nothingradio.com/tos" target="_blank" rel="noopener noreferrer" style={{ color: '#666', textDecoration: 'underline', textUnderlineOffset: 2 }}>Terms</a>
-        {' '}&amp;{' '}
-        <a href="https://nothingradio.com/privacy-policy" target="_blank" rel="noopener noreferrer" style={{ color: '#666', textDecoration: 'underline', textUnderlineOffset: 2 }}>Privacy</a>.
-      </div>
+      {/* Consent checkbox */}
+      <label
+        style={{
+          display: 'flex', alignItems: 'flex-start', gap: 9, marginTop: 14, cursor: 'pointer',
+          animation: 'slideUp 0.6s cubic-bezier(0.16,1,0.3,1) 0.25s both',
+          fontFamily: "'DM Sans', sans-serif",
+        }}
+      >
+        <span
+          onClick={() => setConsented(v => !v)}
+          style={{
+            flexShrink: 0, marginTop: 2, width: 14, height: 14, borderRadius: 3,
+            border: `1.5px solid ${consented ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.2)'}`,
+            background: consented ? '#fff' : 'transparent',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'border-color 0.2s, background 0.2s',
+          }}
+        >
+          {consented && (
+            <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
+              <polyline points="1,3 3,5 7,1" stroke="#000" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          )}
+        </span>
+        <span
+          onClick={() => setConsented(v => !v)}
+          style={{ fontSize: 11, color: '#444', lineHeight: 1.6 }}
+        >
+          By submitting, you agree to receive updates and reminders via SMS. Msg &amp; data rates may apply. Reply STOP to opt out at any time.{' '}
+          <a href="https://nothingradio.com/tos" target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#666', textDecoration: 'underline', textUnderlineOffset: 2 }}>Terms</a>
+          {' '}&amp;{' '}
+          <a href="https://nothingradio.com/privacy-policy" target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#666', textDecoration: 'underline', textUnderlineOffset: 2 }}>Privacy</a>.
+        </span>
+      </label>
 
       <style>{`
         @keyframes slideUp { from { opacity:0; transform:translateY(24px); } to { opacity:1; transform:translateY(0); } }
