@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
     month: 'long',
     day: 'numeric',
   })
-  const smsBody = `You're confirmed for ${event.name} on ${eventDate}. See you there! Reply STOP to opt out.`
+  const smsBody = `Nothing Radio: You're confirmed for ${event.name} on ${eventDate}. See you there! Reply STOP to opt out.`
 
   try {
     await sendSMS(normalizedPhone, smsBody)
