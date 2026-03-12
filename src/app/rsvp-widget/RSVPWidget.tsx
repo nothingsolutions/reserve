@@ -240,7 +240,7 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
     } finally {
       setSubmitting(false)
     }
-  }, [submitting, phoneValue, selectedCountry, eventId])
+  }, [submitting, consented, phoneValue, selectedCountry, eventId])
 
   // Name is optional — PATCH only if they typed something
   const handleSubmitName = useCallback(async () => {
