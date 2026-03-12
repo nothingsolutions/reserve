@@ -605,7 +605,7 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
           onClick={() => setConsented(v => !v)}
           style={{ fontSize: 11, color: '#444', lineHeight: 1.6 }}
         >
-          By submitting, you agree to receive updates and reminders via SMS. Msg &amp; data rates may apply. Reply STOP to opt out at any time.{' '}
+          I agree to receive automated event updates and reminders from Nothing Radio via SMS. Msg &amp; data rates may apply. Message frequency varies. Reply HELP for help or STOP to opt out at any time.{' '}
           <a href="https://nothingradio.com/tos" target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#666', textDecoration: 'underline', textUnderlineOffset: 2 }}>Terms</a>
           {' '}&amp;{' '}
           <a href="https://nothingradio.com/privacy-policy" target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#666', textDecoration: 'underline', textUnderlineOffset: 2 }}>Privacy</a>.
