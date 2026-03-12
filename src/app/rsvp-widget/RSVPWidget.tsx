@@ -200,7 +200,7 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
 
   // API fires here — at RSVP button click
   const handleRSVP = useCallback(async () => {
-    if (submitting) return
+    if (submitting || !consented) return
     setPhoneApiError('')
 
     if (!isPhoneComplete(phoneValue, selectedCountry.dial)) {
@@ -536,7 +536,7 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
           type="tel"
           value={phoneValue}
           onChange={handlePhoneInput}
-          onKeyDown={e => { if (e.key === 'Enter') handleRSVP() }}
+          onKeyDown={e => { if (e.key === 'Enter' && consented) handleRSVP() }}
           placeholder={selectedCountry.placeholder}
           autoComplete="tel"
           style={{
