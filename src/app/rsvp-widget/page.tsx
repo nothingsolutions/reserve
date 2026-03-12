@@ -15,11 +15,14 @@ export default function RSVPWidgetPage() {
       </div>
 
       {/* Card */}
-      <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 440, margin: 24, background: '#000000', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20, padding: '36px 32px 28px' }}>
+      <div className="rsvp-card" style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 440, margin: 24, background: '#000000', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 20, padding: '36px 32px 28px' }}>
         <RSVPWidget />
       </div>
 
       <style>{`
+        @media (max-width: 480px) {
+          .rsvp-card { padding: 24px 16px 20px !important; margin: 12px !important; }
+        }
         @keyframes breathe {
           0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
           50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }

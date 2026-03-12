@@ -546,31 +546,32 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
             minWidth: 0, padding: '6px 4px', caretColor: '#fff',
           }}
         />
-
-        {/* RSVP button */}
-        <button
-          type="button"
-          onClick={handleRSVP}
-          disabled={submitting || !consented}
-          style={{
-            flexShrink: 0, background: (submitting || !consented) ? 'rgba(255,255,255,0.35)' : '#fff', color: '#000',
-            border: 'none', borderRadius: 100, padding: '12px 22px',
-            fontFamily: "'Helvetica Neue', 'Arial Narrow', sans-serif", fontStretch: 'condensed', fontSize: 13, fontWeight: 700,
-            letterSpacing: '0.1em', textTransform: 'uppercase', cursor: (submitting || !consented) ? 'not-allowed' : 'pointer',
-            transition: 'transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease',
-            display: 'flex', alignItems: 'center', gap: 6,
-          }}
-          onMouseEnter={e => { if (!submitting && consented) { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.03)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 20px rgba(255,255,255,0.2)' } }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = ''; (e.currentTarget as HTMLButtonElement).style.boxShadow = '' }}
-          onMouseDown={e => { if (!submitting && consented) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.97)' }}
-          onMouseUp={e => { if (!submitting && consented) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.03)' }}
-        >
-          {submitting && (
-            <span style={{ width: 12, height: 12, border: '2px solid rgba(0,0,0,0.3)', borderTopColor: '#000', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
-          )}
-          {submitting ? 'Saving…' : 'RSVP'}
-        </button>
       </div>
+
+      {/* RSVP button — full width below input row */}
+      <button
+        type="button"
+        onClick={handleRSVP}
+        disabled={submitting || !consented}
+        style={{
+          width: '100%', marginTop: 10,
+          background: (submitting || !consented) ? 'rgba(255,255,255,0.35)' : '#fff', color: '#000',
+          border: 'none', borderRadius: 100, padding: '13px 22px',
+          fontFamily: "'Helvetica Neue', 'Arial Narrow', sans-serif", fontStretch: 'condensed', fontSize: 13, fontWeight: 700,
+          letterSpacing: '0.1em', textTransform: 'uppercase', cursor: (submitting || !consented) ? 'not-allowed' : 'pointer',
+          transition: 'transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        }}
+        onMouseEnter={e => { if (!submitting && consented) { (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.02)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 0 20px rgba(255,255,255,0.2)' } }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = ''; (e.currentTarget as HTMLButtonElement).style.boxShadow = '' }}
+        onMouseDown={e => { if (!submitting && consented) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(0.98)' }}
+        onMouseUp={e => { if (!submitting && consented) (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.02)' }}
+      >
+        {submitting && (
+          <span style={{ width: 12, height: 12, border: '2px solid rgba(0,0,0,0.3)', borderTopColor: '#000', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
+        )}
+        {submitting ? 'Saving…' : 'RSVP'}
+      </button>
 
       {/* API error below input row */}
       {phoneApiError && (
