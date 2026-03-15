@@ -65,8 +65,9 @@ export async function POST(req: NextRequest) {
     return twimlEmpty()
   }
 
-  // ── RADIO: auto-RSVP to next upcoming event ───────────────────────────────
-  if (messageBody === 'RADIO') {
+  // ── RSVP keywords: auto-RSVP to next upcoming event ─────────────────────
+  const RSVP_KEYWORDS = new Set(['RADIO', 'NOTHING', 'RSVP', 'NOTHING RADIO', 'OPT IN'])
+  if (RSVP_KEYWORDS.has(messageBody)) {
     // Check if opted out
     const { data: optOut } = await supabase()
       .from('opt_outs')
