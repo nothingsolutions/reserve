@@ -96,6 +96,10 @@ export async function POST(req: NextRequest) {
       month: 'long',
       day: 'numeric',
     })
+    const eventTime = new Date(nextEvent.date).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    })
 
     // Check if already RSVP'd
     const { data: existing } = await supabase()
@@ -107,7 +111,7 @@ export async function POST(req: NextRequest) {
 
     if (existing) {
       return twimlReply(
-        `Nothing Radio: You're already confirmed for ${nextEvent.name} on ${eventDate}. See you there!`
+        `Nothing Radio: You're already confirmed for ${nextEvent.name} on ${eventDate}. See you there.`
       )
     }
 
@@ -120,7 +124,7 @@ export async function POST(req: NextRequest) {
     })
 
     return twimlReply(
-      `Nothing Radio: You're confirmed for ${nextEvent.name} on ${eventDate}. See you there! Reply STOP to opt out.`
+      `Nothing Radio: You're confirmed for ${nextEvent.name} on ${eventDate}, ${eventTime}. Reply STOP to opt out.`
     )
   }
 

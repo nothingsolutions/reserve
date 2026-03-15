@@ -182,7 +182,7 @@ export default function AdminPage() {
 
   // Send form
   const [sendTarget, setSendTarget] = useState('all')
-  const [sendMessage, setSendMessage] = useState('')
+  const [sendMessage, setSendMessage] = useState('Nothing Radio: ')
   const [sending, setSending] = useState(false)
   const [sendResult, setSendResult] = useState<{ sent: number; total: number; errors?: string[] } | null>(null)
   const [sendError, setSendError] = useState('')
@@ -252,7 +252,7 @@ export default function AdminPage() {
         setSendError(data.error ?? 'Send failed.')
       } else {
         setSendResult(data)
-        setSendMessage('')
+        setSendMessage('Nothing Radio: ')
       }
     } catch {
       setSendError('Network error. Please try again.')
