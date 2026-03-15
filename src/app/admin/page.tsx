@@ -13,6 +13,7 @@ type Event = {
   date: string
   description?: string
   flyer_url?: string
+  series?: string | null
   rsvp_count: number
   attendees: Attendee[]
   created_at: string
@@ -76,7 +77,14 @@ function EventCard({ event }: { event: Event }) {
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors text-left gap-4"
       >
         <div className="min-w-0">
-          <p className="text-white font-medium text-sm truncate">{event.name}</p>
+          <div className="flex items-center gap-2 min-w-0">
+            <p className="text-white font-medium text-sm truncate">{event.name}</p>
+            {event.series && (
+              <span className="flex-shrink-0 text-[10px] uppercase tracking-widest text-white/30 border border-white/10 rounded-sm px-1.5 py-0.5">
+                {event.series}
+              </span>
+            )}
+          </div>
           <p className="text-white/40 text-xs mt-0.5">
             {fmtDate(event.date)} &middot; {fmtTime(event.date)}
           </p>
@@ -184,6 +192,7 @@ export default function AdminPage() {
   const [evDate, setEvDate] = useState('')
   const [evDesc, setEvDesc] = useState('')
   const [evFlyer, setEvFlyer] = useState('')
+  const [evSeries, setEvSeries] = useState('')
   const [addingEvent, setAddingEvent] = useState(false)
   const [addEventError, setAddEventError] = useState('')
   const [addEventSuccess, setAddEventSuccess] = useState('')
@@ -263,7 +272,7 @@ export default function AdminPage() {
       const res = await fetch('/api/admin/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: evName, date: evDate, description: evDesc, flyer_url: evFlyer }),
+        body: JSON.stringify({ name: evName, date: evDate, description: evDesc, flyer_url: evFlyer, series: evSeries || null }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -274,7 +283,7 @@ export default function AdminPage() {
         setAddEventSuccess(`Event "${data.name}" created.`)
         setNewEventId(data.id)
         setNewEventIframe(iframe)
-        setEvName(''); setEvDate(''); setEvDesc(''); setEvFlyer('')
+        setEvName(''); setEvDate(''); setEvDesc(''); setEvFlyer(''); setEvSeries('')
         fetchEvents()
       }
     } catch {
@@ -396,6 +405,12 @@ export default function AdminPage() {
                 className="w-full bg-black border border-white/20 rounded-sm px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/50 transition-colors"
               >
                 <option value="all">Everyone on the list (all RSVPs, minus opt-outs)</option>
+                {/* Series targets — auto-derived from events that have a series tag */}
+                {[...new Set(events.map((ev) => ev.series).filter(Boolean))].map((s) => (
+                  <option key={`series:${s}`} value={`series:${s}`}>
+                    All {s} RSVPs
+                  </option>
+                ))}
                 {events.map((ev) => (
                   <option key={ev.id} value={ev.id}>
                     {ev.name} — {fmtDate(ev.date)} ({ev.rsvp_count} RSVPs)
@@ -502,6 +517,22 @@ export default function AdminPage() {
                 placeholder="https://…"
                 className="w-full bg-transparent border border-white/20 rounded-sm px-3 py-2.5 text-white placeholder-white/20 focus:outline-none focus:border-white/50 text-sm transition-colors"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs uppercase tracking-widest text-white/40 mb-1.5">
+                Series (optional)
+              </label>
+              <select
+                value={evSeries}
+                onChange={(e) => setEvSeries(e.target.value)}
+                className="w-full bg-black border border-white/20 rounded-sm px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/50 transition-colors"
+              >
+                <option value="">One-off / no series</option>
+                <option value="Nothing Radio">Nothing Radio</option>
+                <option value="Get a Room">Get a Room</option>
+              </select>
+              <p className="text-white/20 text-xs mt-1">Used to group and target by series when sending messages.</p>
             </div>
 
             {addEventError && <p className="text-red-400 text-xs">{addEventError}</p>}

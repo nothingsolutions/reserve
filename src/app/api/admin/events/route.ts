@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 export async function GET() {
   const { data: events, error } = await supabase()
     .from('events')
-    .select('id, name, date, description, flyer_url, created_at')
+    .select('id, name, date, description, flyer_url, series, created_at')
     .order('date', { ascending: false })
 
   if (error) {
@@ -22,6 +22,7 @@ export async function GET() {
 
       return {
         ...event,
+        series: event.series ?? null,
         rsvp_count: rsvps?.length ?? 0,
         attendees: rsvps ?? [],
       }
@@ -33,14 +34,14 @@ export async function GET() {
 
 // POST /api/admin/events — create a new event
 export async function POST(req: NextRequest) {
-  let body: { name?: string; date?: string; description?: string; flyer_url?: string }
+  let body: { name?: string; date?: string; description?: string; flyer_url?: string; series?: string }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { name, date, description, flyer_url } = body
+  const { name, date, description, flyer_url, series } = body
   if (!name?.trim() || !date) {
     return NextResponse.json({ error: 'Name and date are required' }, { status: 400 })
   }
@@ -52,8 +53,9 @@ export async function POST(req: NextRequest) {
       date,
       description: description?.trim().slice(0, 500) ?? null,
       flyer_url: flyer_url?.trim() ?? null,
+      series: series?.trim().slice(0, 100) ?? null,
     })
-    .select('id, name, date, description, flyer_url, created_at')
+    .select('id, name, date, description, flyer_url, series, created_at')
     .single()
 
   if (error) {

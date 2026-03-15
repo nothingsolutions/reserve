@@ -41,6 +41,15 @@ export async function POST(req: NextRequest) {
     const { data: rsvps } = await supabase().from('rsvps').select('phone')
     const unique = [...new Set((rsvps ?? []).map((r) => r.phone))]
     phones = unique.filter((p) => !optOutSet.has(p))
+  } else if (target.startsWith('series:')) {
+    const seriesName = target.slice(7)
+    const { data: rsvpData } = await supabase()
+      .from('rsvps')
+      .select('phone, events!inner(series)')
+      .filter('events.series', 'eq', seriesName)
+    const allPhones = (rsvpData ?? []).map((r: { phone: string }) => r.phone)
+    const unique = [...new Set(allPhones)]
+    phones = unique.filter((p) => !optOutSet.has(p))
   } else {
     // Specific event ID
     const { data: rsvps } = await supabase()
