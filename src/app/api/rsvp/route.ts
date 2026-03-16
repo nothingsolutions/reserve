@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { sendSMS } from '@/lib/twilio'
 import { rateLimit } from '@/lib/rate-limit'
+import { notifyNewRsvp } from '@/lib/email'
 
 export function normalizePhone(raw: string): string | null {
   const digits = raw.replace(/\D/g, '')
@@ -104,6 +105,11 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('Confirmation SMS failed:', (err as Error).message?.slice(0, 80))
   }
+
+  // Non-blocking notification email — failure does not affect the RSVP response
+  notifyNewRsvp({ eventName: event.name, source: 'web' }).catch((err) =>
+    console.error('RSVP notification email failed:', (err as Error).message?.slice(0, 120))
+  )
 
   return NextResponse.json({ status: 'confirmed', returning })
 }

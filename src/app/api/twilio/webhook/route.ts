@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { validateTwilioSignature } from '@/lib/twilio'
+import { notifyNewRsvp } from '@/lib/email'
 
 function normalizePhone(raw: string): string {
   const digits = raw.replace(/\D/g, '')
@@ -123,6 +124,11 @@ export async function POST(req: NextRequest) {
       name: '',
       consented_at: new Date().toISOString(),
     })
+
+    // Non-blocking notification email
+    notifyNewRsvp({ eventName: nextEvent.name, source: 'sms' }).catch((err) =>
+      console.error('RSVP notification email failed:', (err as Error).message?.slice(0, 120))
+    )
 
     return twimlReply(
       `Nothing Radio: You're confirmed for ${nextEvent.name} on ${eventDate}, ${eventTime}. Reply STOP to opt out.`
