@@ -22,9 +22,9 @@ export async function notifyNewRsvp({
 }): Promise<void> {
   const to = process.env.NOTIFY_EMAIL
   const from = process.env.NOTIFY_FROM_EMAIL ?? 'Nothing Radio RSVPs <onboarding@resend.dev>'
-  const adminUrl = process.env.APP_URL
-    ? `${process.env.APP_URL}/admin`
-    : 'https://reservenothing.vercel.app/admin'
+  const adminUrl =
+    process.env.NOTIFY_ADMIN_URL?.trim() ||
+    (process.env.APP_URL ? `${process.env.APP_URL}/admin` : 'https://reservenothing.vercel.app/admin')
 
   if (!to) {
     console.warn('NOTIFY_EMAIL not set — skipping RSVP notification email')
