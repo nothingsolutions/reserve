@@ -31,22 +31,25 @@ export async function notifyNewRsvp({
     return
   }
 
+  // Light background + dark text so it stays readable in dark-mode email clients
+  const safeEventName = eventName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const sourceLabel = source === 'sms' ? 'SMS (text opt-in)' : 'Web form'
   const html = `
-    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#000;color:#fff;border-radius:8px;">
-      <p style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#666;margin:0 0 8px;">Nothing Radio</p>
-      <h1 style="font-size:20px;font-weight:600;margin:0 0 24px;">New RSVP</h1>
+    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#ffffff;color:#111111;border-radius:8px;color-scheme:light;">
+      <p style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#555555;margin:0 0 8px;">Nothing Radio</p>
+      <h1 style="font-size:20px;font-weight:600;margin:0 0 24px;color:#111111;">New RSVP</h1>
       <table style="width:100%;border-collapse:collapse;font-size:14px;">
         <tr>
-          <td style="padding:10px 0;color:#888;width:90px;border-bottom:1px solid #222;">Event</td>
-          <td style="padding:10px 0;color:#fff;border-bottom:1px solid #222;">${eventName}</td>
+          <td style="padding:10px 0;color:#555555;width:90px;border-bottom:1px solid #e0e0e0;">Event</td>
+          <td style="padding:10px 0;color:#111111;border-bottom:1px solid #e0e0e0;">${safeEventName}</td>
         </tr>
         <tr>
-          <td style="padding:10px 0;color:#888;border-bottom:1px solid #222;">Source</td>
-          <td style="padding:10px 0;color:#fff;border-bottom:1px solid #222;">${source === 'sms' ? 'SMS (text opt-in)' : 'Web form'}</td>
+          <td style="padding:10px 0;color:#555555;border-bottom:1px solid #e0e0e0;">Source</td>
+          <td style="padding:10px 0;color:#111111;border-bottom:1px solid #e0e0e0;">${sourceLabel}</td>
         </tr>
       </table>
       <div style="margin-top:28px;">
-        <a href="${adminUrl}" style="display:inline-block;background:#fff;color:#000;text-decoration:none;padding:12px 24px;border-radius:100px;font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">View in Admin</a>
+        <a href="${adminUrl}" style="display:inline-block;background:#111111;color:#ffffff !important;text-decoration:none;padding:12px 24px;border-radius:100px;font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;">View in Admin</a>
       </div>
     </div>
   `
