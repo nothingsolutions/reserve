@@ -186,6 +186,7 @@ export default function AdminPage() {
   const [sending, setSending] = useState(false)
   const [sendResult, setSendResult] = useState<{ sent: number; total: number; errors?: string[] } | null>(null)
   const [sendError, setSendError] = useState('')
+  const [sendProgress, setSendProgress] = useState<{ sent: number; grandTotal: number; log: string[] } | null>(null)
 
   // Add event form
   const [evName, setEvName] = useState('')
@@ -238,22 +239,46 @@ export default function AdminPage() {
     e.preventDefault()
     setSendError('')
     setSendResult(null)
+    setSendProgress(null)
     if (!sendMessage.trim()) { setSendError('Message cannot be empty.'); return }
     setSending(true)
 
+    let offset = 0
+    let totalSent = 0
+    let grandTotal = 0
+    const allErrors: string[] = []
+    const log: string[] = []
+
     try {
-      const res = await fetch('/api/admin/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: sendMessage, target: sendTarget }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setSendError(data.error ?? 'Send failed.')
-      } else {
-        setSendResult(data)
-        setSendMessage('Nothing Radio: ')
+      while (true) {
+        const res = await fetch('/api/admin/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: sendMessage, target: sendTarget, offset }),
+        })
+        const data = await res.json()
+
+        if (!res.ok) {
+          setSendError(data.error ?? 'Send failed.')
+          break
+        }
+
+        grandTotal = data.grandTotal
+        totalSent += data.batchSent
+        if (data.errors?.length) allErrors.push(...data.errors)
+
+        // Add sent phones to the log
+        const newLines = (data.phones ?? []).map((p: string) => `→ ${p}`)
+        log.push(...newLines)
+
+        setSendProgress({ sent: totalSent, grandTotal, log: [...log] })
+
+        if (data.nextOffset === null) break
+        offset = data.nextOffset
       }
+
+      setSendResult({ sent: totalSent, total: grandTotal, errors: allErrors.slice(0, 5) })
+      setSendMessage('Nothing Radio: ')
     } catch {
       setSendError('Network error. Please try again.')
     } finally {
@@ -437,8 +462,34 @@ export default function AdminPage() {
 
             {sendError && <p className="text-red-400 text-xs">{sendError}</p>}
 
-            {sendResult && (
-              <div className="border border-white/10 rounded-sm px-4 py-3 space-y-1">
+            {/* Live send progress */}
+            {sending && sendProgress && (
+              <div className="border border-white/10 rounded-sm px-4 py-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-white/60 text-xs uppercase tracking-widest">Sending…</p>
+                  <p className="text-white text-sm font-semibold tabular-nums">
+                    {sendProgress.sent} / {sendProgress.grandTotal}
+                  </p>
+                </div>
+                {/* Progress bar */}
+                <div className="w-full bg-white/10 rounded-full h-1">
+                  <div
+                    className="bg-white h-1 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.round((sendProgress.sent / sendProgress.grandTotal) * 100)}%` }}
+                  />
+                </div>
+                {/* Scrollable log of sent numbers */}
+                <div className="max-h-32 overflow-y-auto space-y-0.5">
+                  {sendProgress.log.map((line, i) => (
+                    <p key={i} className="text-white/30 text-xs font-mono">{line}</p>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Final result */}
+            {!sending && sendResult && (
+              <div className="border border-white/10 rounded-sm px-4 py-3 space-y-2">
                 <p className="text-white text-sm">
                   Sent to <span className="font-semibold">{sendResult.sent}</span> of{' '}
                   <span className="font-semibold">{sendResult.total}</span> recipients.
@@ -447,6 +498,15 @@ export default function AdminPage() {
                   <p className="text-red-400 text-xs">
                     {sendResult.errors.length} error(s): {sendResult.errors[0]}
                   </p>
+                )}
+                {/* Full log after completion */}
+                {sendProgress && sendProgress.log.length > 0 && (
+                  <div className="max-h-40 overflow-y-auto border-t border-white/10 pt-2 space-y-0.5">
+                    <p className="text-white/20 text-xs uppercase tracking-widest mb-1">Sent to</p>
+                    {sendProgress.log.map((line, i) => (
+                      <p key={i} className="text-white/30 text-xs font-mono">{line}</p>
+                    ))}
+                  </div>
                 )}
               </div>
             )}
