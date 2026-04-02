@@ -17,10 +17,17 @@ function client() {
   return _client
 }
 
+function normalizeToE164(raw: string): string {
+  let digits = raw.replace(/\D/g, '')
+  if (digits.length === 11 && digits.startsWith('11')) digits = digits.slice(1)
+  if (digits.length === 10) digits = '1' + digits
+  return '+' + digits
+}
+
 export async function sendSMS(to: string, body: string): Promise<void> {
   const from = process.env.TWILIO_PHONE_NUMBER
   if (!from) throw new Error('Missing TWILIO_PHONE_NUMBER env var')
-  await client().messages.create({ body, from, to })
+  await client().messages.create({ body, from, to: normalizeToE164(to) })
 }
 
 export function validateTwilioSignature(

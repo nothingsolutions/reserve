@@ -5,7 +5,8 @@ import { rateLimit } from '@/lib/rate-limit'
 import { notifyNewRsvp } from '@/lib/email'
 
 export function normalizePhone(raw: string): string | null {
-  const digits = raw.replace(/\D/g, '')
+  let digits = raw.replace(/\D/g, '')
+  if (digits.length === 11 && digits.startsWith('11')) digits = digits.slice(1)
   if (digits.length === 10) return `+1${digits}`
   if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
   if (digits.length >= 7 && digits.length <= 15) return `+${digits}`
