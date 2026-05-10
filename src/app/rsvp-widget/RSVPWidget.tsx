@@ -214,6 +214,15 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
 
     // Send clean dial+digits — no formatting characters
     const digitsOnly = phoneValue.replace(/\D/g, '')
+
+    // For US/Canada, no valid area code starts with 0 or 1 (NANP rule).
+    // Users sometimes type a leading 1 thinking it's the country code, which corrupts the area code.
+    if (selectedCountry.dial === '+1' && /^[01]/.test(digitsOnly)) {
+      setPhoneApiError("Please enter your 10-digit number without a leading 1.")
+      setSubmitting(false)
+      return
+    }
+
     const fullPhone = `${selectedCountry.dial}${digitsOnly}`
     setCleanPhone(fullPhone)
 

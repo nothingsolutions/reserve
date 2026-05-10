@@ -9,7 +9,11 @@ import { formatEventDateLong } from '@/lib/eventTimezone'
 export function normalizePhone(raw: string): string | null {
   let digits = raw.replace(/\D/g, '')
   if (digits.length === 11 && digits.startsWith('11')) digits = digits.slice(1)
-  if (digits.length === 10) return `+1${digits}`
+  if (digits.length === 10) {
+    // NANP area codes must start with 2–9; 0 and 1 are never valid first digits.
+    if (digits[0] === '0' || digits[0] === '1') return null
+    return `+1${digits}`
+  }
   if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
   if (digits.length >= 7 && digits.length <= 15) return `+${digits}`
   return null

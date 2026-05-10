@@ -20,7 +20,11 @@ function client() {
 function normalizeToE164(raw: string): string {
   let digits = raw.replace(/\D/g, '')
   if (digits.length === 11 && digits.startsWith('11')) digits = digits.slice(1)
-  if (digits.length === 10) digits = '1' + digits
+  if (digits.length === 10) {
+    // NANP area codes must start with 2–9; reject anything that slipped through validation.
+    if (digits[0] === '0' || digits[0] === '1') throw new Error(`Invalid phone number: ${raw}`)
+    digits = '1' + digits
+  }
   return '+' + digits
 }
 
