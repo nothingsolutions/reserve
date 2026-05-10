@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { formatEventDateWidget } from '@/lib/eventTimezone'
 
 // ── Country data ─────────────────────────────────────────────────────────────
 type Country = { flag: string; name: string; dial: string; code: string; placeholder: string }
@@ -271,7 +272,7 @@ export default function RSVPWidget({ eyebrow: eyebrowProp, mainTitle: mainTitleP
   const handleSkipName = useCallback(() => setStep('done'), [])
 
   // ── Computed title fields ────────────────────────────────────────────────
-  const eyebrowText = eyebrowProp ?? (event ? new Date(event.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '')
+  const eyebrowText = eyebrowProp ?? (event ? formatEventDateWidget(event.date) : '')
   const mainTitleText = mainTitleProp ?? event?.name ?? ''
   const subtitleText = subtitleProp ?? event?.description ?? ''
 

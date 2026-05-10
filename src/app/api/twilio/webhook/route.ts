@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { validateTwilioSignature } from '@/lib/twilio'
 import { notifyNewRsvp } from '@/lib/email'
 import { getSmsTemplate, interpolateSmsTemplate } from '@/lib/sms-confirmation-template'
+import { formatEventDateLong } from '@/lib/eventTimezone'
 
 function normalizePhone(raw: string): string {
   const digits = raw.replace(/\D/g, '')
@@ -94,11 +95,7 @@ export async function POST(req: NextRequest) {
       return twimlReply('Nothing Radio: No events scheduled yet — stay tuned! Reply STOP to opt out.')
     }
 
-    const eventDate = new Date(nextEvent.date).toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-    })
+    const eventDate = formatEventDateLong(nextEvent.date)
 
     // Check if already RSVP'd
     const { data: existing } = await supabase()

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
+import { parsePickerToUtcIso } from '@/lib/eventTimezone'
 
 // GET /api/admin/events — list all events with RSVP counts and attendee names
 export async function GET() {
@@ -46,11 +47,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Name and date are required' }, { status: 400 })
   }
 
+  // Normalize: if the client sent a naive picker string (no offset/Z), treat it
+  // as America/New_York and convert to UTC. If it already has an offset, use as-is.
+  const isNaive = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(date)
+  const utcDate = isNaive ? parsePickerToUtcIso(date) : date
+  if (!utcDate) {
+    return NextResponse.json({ error: 'Invalid date value' }, { status: 400 })
+  }
+
   const { data, error } = await supabase()
     .from('events')
     .insert({
       name: name.trim().slice(0, 200),
-      date,
+      date: utcDate,
       description: description?.trim().slice(0, 500) ?? null,
       flyer_url: flyer_url?.trim() ?? null,
       series: series?.trim().slice(0, 100) ?? null,

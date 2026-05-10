@@ -4,6 +4,7 @@ import { sendSMS } from '@/lib/twilio'
 import { rateLimit } from '@/lib/rate-limit'
 import { notifyNewRsvp } from '@/lib/email'
 import { getSmsTemplate, interpolateSmsTemplate } from '@/lib/sms-confirmation-template'
+import { formatEventDateLong } from '@/lib/eventTimezone'
 
 export function normalizePhone(raw: string): string | null {
   let digits = raw.replace(/\D/g, '')
@@ -95,11 +96,7 @@ export async function POST(req: NextRequest) {
   const returning = !!prior
 
   // Send confirmation SMS (non-fatal if it fails — RSVP is already stored)
-  const eventDate = new Date(event.date).toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  })
+  const eventDate = formatEventDateLong(event.date)
 
   try {
     const tmpl = await getSmsTemplate()

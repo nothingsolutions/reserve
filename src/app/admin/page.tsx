@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { formatEventDate, formatEventTime, parsePickerToUtcIso } from '@/lib/eventTimezone'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type Attendee = { id: string; name: string; phone: string; created_at: string }
@@ -30,16 +31,11 @@ type Tab = 'events' | 'people' | 'send' | 'add-event' | 'settings'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+  return formatEventDate(iso)
 }
 
 function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  return formatEventTime(iso)
 }
 
 function maskPhone(p: string) {
@@ -431,13 +427,15 @@ export default function AdminPage() {
     setAddEventError('')
     setAddEventSuccess('')
     if (!evName.trim() || !evDate) { setAddEventError('Name and date are required.'); return }
+    const utcDate = parsePickerToUtcIso(evDate)
+    if (!utcDate) { setAddEventError('Invalid date/time. Please re-enter.'); return }
     setAddingEvent(true)
 
     try {
       const res = await fetch('/api/admin/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: evName, date: evDate, description: evDesc, flyer_url: evFlyer, series: evSeries || null }),
+        body: JSON.stringify({ name: evName, date: utcDate, description: evDesc, flyer_url: evFlyer, series: evSeries || null }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -778,7 +776,7 @@ export default function AdminPage() {
 
             <div>
               <label className="block text-xs uppercase tracking-widest text-white/40 mb-1.5">
-                Date &amp; Time *
+                Date &amp; Time (Eastern) *
               </label>
               <input
                 type="datetime-local"
