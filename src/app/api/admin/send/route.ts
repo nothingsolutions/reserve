@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { sendSMS } from '@/lib/twilio'
+import { sendMessage } from '@/lib/twilio'
 import { rateLimit } from '@/lib/rate-limit'
 
 const BATCH_SIZE = 40      // recipients per API call (keeps execution under 60s on Vercel free)
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  let body: { message?: string; target?: string; offset?: number }
+  let body: { message?: string; target?: string; offset?: number; mediaUrls?: string[] }
   try {
     body = await req.json()
   } catch {
@@ -34,8 +34,15 @@ export async function POST(req: NextRequest) {
 
   const { message, target, offset = 0 } = body
 
-  if (!message?.trim()) {
-    return NextResponse.json({ error: 'Message is required' }, { status: 400 })
+  // Validate and filter mediaUrls — must be HTTPS, max 10 (Twilio limit)
+  const rawMediaUrls = Array.isArray(body.mediaUrls) ? body.mediaUrls : []
+  const mediaUrls = rawMediaUrls
+    .map((u) => (typeof u === 'string' ? u.trim() : ''))
+    .filter((u) => u.startsWith('https://'))
+    .slice(0, 10)
+
+  if (!message?.trim() && mediaUrls.length === 0) {
+    return NextResponse.json({ error: 'A message or image URL is required.' }, { status: 400 })
   }
   if (!target) {
     return NextResponse.json({ error: 'Target (all or event ID) is required' }, { status: 400 })
@@ -78,14 +85,14 @@ export async function POST(req: NextRequest) {
   const batch = allPhones.slice(offset, offset + BATCH_SIZE)
   const nextOffset = offset + BATCH_SIZE < grandTotal ? offset + BATCH_SIZE : null
 
-  const trimmedMessage = message.trim()
+  const trimmedMessage = (message ?? '').trim()
   let sent = 0
   const errors: string[] = []
   const sentPhones: string[] = []
 
   for (const phone of batch) {
     try {
-      await sendSMS(phone, trimmedMessage)
+      await sendMessage(phone, trimmedMessage, mediaUrls.length > 0 ? mediaUrls : undefined)
       sent++
       sentPhones.push(maskPhone(phone))
     } catch (err) {

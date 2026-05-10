@@ -30,6 +30,24 @@ export async function sendSMS(to: string, body: string): Promise<void> {
   await client().messages.create({ body, from, to: normalizeToE164(to) })
 }
 
+// Sends an SMS or MMS depending on whether mediaUrls are provided.
+// When mediaUrls is non-empty the message becomes an MMS (Twilio fetches each URL at send time).
+// body may be empty for image-only sends but most carriers render better with at least a short caption.
+export async function sendMessage(
+  to: string,
+  body: string,
+  mediaUrls?: string[],
+): Promise<void> {
+  const from = process.env.TWILIO_PHONE_NUMBER
+  if (!from) throw new Error('Missing TWILIO_PHONE_NUMBER env var')
+  const normalized = normalizeToE164(to)
+  if (mediaUrls && mediaUrls.length > 0) {
+    await client().messages.create({ body, from, to: normalized, mediaUrl: mediaUrls })
+  } else {
+    await client().messages.create({ body, from, to: normalized })
+  }
+}
+
 export function validateTwilioSignature(
   signature: string,
   url: string,

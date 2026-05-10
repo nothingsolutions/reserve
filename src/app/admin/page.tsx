@@ -183,6 +183,8 @@ export default function AdminPage() {
   // Send form
   const [sendTarget, setSendTarget] = useState('all')
   const [sendMessage, setSendMessage] = useState('Nothing Radio: ')
+  const [sendImageUrl, setSendImageUrl] = useState('')
+  const [imagePreviewError, setImagePreviewError] = useState(false)
   const [sending, setSending] = useState(false)
   const [sendResult, setSendResult] = useState<{ sent: number; total: number; errors?: string[] } | null>(null)
   const [sendError, setSendError] = useState('')
@@ -266,7 +268,15 @@ export default function AdminPage() {
     setSendError('')
     setSendResult(null)
     setSendProgress(null)
-    if (!sendMessage.trim()) { setSendError('Message cannot be empty.'); return }
+
+    const trimmedUrl = sendImageUrl.trim()
+    const mediaUrls = trimmedUrl.startsWith('https://') ? [trimmedUrl] : []
+
+    if (!sendMessage.trim() && mediaUrls.length === 0) {
+      setSendError('A message or image URL is required.')
+      return
+    }
+
     setSending(true)
 
     let offset = 0
@@ -280,7 +290,7 @@ export default function AdminPage() {
         const res = await fetch('/api/admin/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: sendMessage, target: sendTarget, offset }),
+          body: JSON.stringify({ message: sendMessage, target: sendTarget, offset, mediaUrls }),
         })
         const data = await res.json()
 
@@ -293,7 +303,6 @@ export default function AdminPage() {
         totalSent += data.batchSent
         if (data.errors?.length) allErrors.push(...data.errors)
 
-        // Add sent phones to the log
         const newLines = (data.phones ?? []).map((p: string) => `→ ${p}`)
         log.push(...newLines)
 
@@ -305,6 +314,8 @@ export default function AdminPage() {
 
       setSendResult({ sent: totalSent, total: grandTotal, errors: allErrors.slice(0, 5) })
       setSendMessage('Nothing Radio: ')
+      setSendImageUrl('')
+      setImagePreviewError(false)
     } catch {
       setSendError('Network error. Please try again.')
     } finally {
@@ -534,10 +545,43 @@ export default function AdminPage() {
                 onChange={(e) => setSendMessage(e.target.value)}
                 rows={5}
                 placeholder="Type your message…"
-                required
                 className="w-full bg-transparent border border-white/20 rounded-sm px-3 py-2.5 text-white placeholder-white/20 focus:outline-none focus:border-white/50 text-sm transition-colors resize-none"
               />
               <p className="text-white/20 text-xs mt-1">{sendMessage.length} characters</p>
+            </div>
+
+            {/* Image URL */}
+            <div>
+              <label className="block text-xs uppercase tracking-widest text-white/40 mb-1.5">
+                Image URL <span className="text-white/20 normal-case tracking-normal">(optional — MMS)</span>
+              </label>
+              <input
+                type="url"
+                value={sendImageUrl}
+                onChange={(e) => {
+                  setSendImageUrl(e.target.value)
+                  setImagePreviewError(false)
+                }}
+                placeholder="https://…"
+                className="w-full bg-transparent border border-white/20 rounded-sm px-3 py-2.5 text-white placeholder-white/20 focus:outline-none focus:border-white/50 text-sm transition-colors"
+              />
+              {sendImageUrl.trim().startsWith('https://') && (
+                <div className="mt-2">
+                  {imagePreviewError ? (
+                    <p className="text-white/30 text-xs">
+                      Couldn&apos;t load preview — the link may block embedding, but Twilio may still be able to fetch it.
+                    </p>
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={sendImageUrl.trim()}
+                      alt="Image preview"
+                      onError={() => setImagePreviewError(true)}
+                      className="max-h-48 max-w-full rounded-sm border border-white/10 object-contain bg-white/5"
+                    />
+                  )}
+                </div>
+              )}
             </div>
 
             {sendError && <p className="text-red-400 text-xs">{sendError}</p>}
