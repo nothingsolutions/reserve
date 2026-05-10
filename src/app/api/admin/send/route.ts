@@ -6,6 +6,9 @@ import { rateLimit } from '@/lib/rate-limit'
 const BATCH_SIZE = 40      // recipients per API call (keeps execution under 60s on Vercel free)
 const SEND_DELAY_MS = 200  // ms between sends (respects 1 MPS toll-free carrier limit)
 
+// Test sends always go to this number only — hardcoded server-side, never overridable by client
+const TEST_PHONE = '+17146601675'
+
 function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
@@ -14,7 +17,49 @@ function maskPhone(p: string) {
   return p.replace(/(\+?\d+)(\d{4})$/, (_, prefix, last4) => '*'.repeat(prefix.length) + last4)
 }
 
-// POST /api/admin/send — send a one-off message in batches to avoid Vercel timeout
+// Shared recipient resolution — returns deduplicated, opt-out-filtered phone list for a given target.
+// Used by both GET (count) and POST (send).
+async function resolveRecipients(target: string): Promise<string[]> {
+  const { data: optOuts } = await supabase().from('opt_outs').select('phone')
+  const optOutSet = new Set((optOuts ?? []).map((o) => o.phone))
+
+  if (target === 'all') {
+    const { data: rsvps } = await supabase().from('rsvps').select('phone')
+    const unique = [...new Set((rsvps ?? []).map((r) => r.phone))]
+    return unique.filter((p) => !optOutSet.has(p))
+  }
+
+  if (target.startsWith('series:')) {
+    const seriesName = target.slice(7)
+    const { data: rsvpData } = await supabase()
+      .from('rsvps')
+      .select('phone, events!inner(series)')
+      .filter('events.series', 'eq', seriesName)
+    const unique = [...new Set((rsvpData ?? []).map((r: { phone: string }) => r.phone))]
+    return unique.filter((p) => !optOutSet.has(p))
+  }
+
+  // Specific event
+  const { data: rsvps } = await supabase()
+    .from('rsvps')
+    .select('phone')
+    .eq('event_id', target)
+  return (rsvps ?? []).map((r) => r.phone).filter((p) => !optOutSet.has(p))
+}
+
+// GET /api/admin/send?target=… — returns recipient count for a target without sending anything
+export async function GET(req: NextRequest) {
+  const target = req.nextUrl.searchParams.get('target')
+  if (!target) {
+    return NextResponse.json({ error: 'target param is required' }, { status: 400 })
+  }
+
+  const phones = await resolveRecipients(target)
+  return NextResponse.json({ count: phones.length })
+}
+
+// POST /api/admin/send — send a one-off message in batches to avoid Vercel timeout.
+// Pass test: true to send only to TEST_PHONE (server-enforced; target is ignored).
 export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
   const { allowed } = rateLimit(`admin-send:${ip}`, 10, 60 * 60 * 1000)
@@ -25,14 +70,14 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  let body: { message?: string; target?: string; offset?: number; mediaUrls?: string[] }
+  let body: { message?: string; target?: string; offset?: number; mediaUrls?: string[]; test?: boolean }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { message, target, offset = 0 } = body
+  const { message, target, offset = 0, test = false } = body
 
   // Validate and filter mediaUrls — must be HTTPS, max 10 (Twilio limit)
   const rawMediaUrls = Array.isArray(body.mediaUrls) ? body.mediaUrls : []
@@ -44,36 +89,15 @@ export async function POST(req: NextRequest) {
   if (!message?.trim() && mediaUrls.length === 0) {
     return NextResponse.json({ error: 'A message or image URL is required.' }, { status: 400 })
   }
-  if (!target) {
+
+  if (!test && !target) {
     return NextResponse.json({ error: 'Target (all or event ID) is required' }, { status: 400 })
   }
 
-  // Build opt-out exclusion set
-  const { data: optOuts } = await supabase().from('opt_outs').select('phone')
-  const optOutSet = new Set((optOuts ?? []).map((o) => o.phone))
-
-  // Get full recipient phone list (deduplicated, opt-outs removed)
-  let allPhones: string[]
-
-  if (target === 'all') {
-    const { data: rsvps } = await supabase().from('rsvps').select('phone')
-    const unique = [...new Set((rsvps ?? []).map((r) => r.phone))]
-    allPhones = unique.filter((p) => !optOutSet.has(p))
-  } else if (target.startsWith('series:')) {
-    const seriesName = target.slice(7)
-    const { data: rsvpData } = await supabase()
-      .from('rsvps')
-      .select('phone, events!inner(series)')
-      .filter('events.series', 'eq', seriesName)
-    const unique = [...new Set((rsvpData ?? []).map((r: { phone: string }) => r.phone))]
-    allPhones = unique.filter((p) => !optOutSet.has(p))
-  } else {
-    const { data: rsvps } = await supabase()
-      .from('rsvps')
-      .select('phone')
-      .eq('event_id', target)
-    allPhones = (rsvps ?? []).map((r) => r.phone).filter((p) => !optOutSet.has(p))
-  }
+  // Resolve recipients: test sends go to one hardcoded number only
+  const allPhones: string[] = test
+    ? [TEST_PHONE]
+    : await resolveRecipients(target!)
 
   const grandTotal = allPhones.length
 
@@ -104,11 +128,11 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({
-    sent,           // sent in this batch
+    sent,
     batchSent: sent,
-    grandTotal,     // total eligible recipients across all batches
-    nextOffset,     // null = all done; number = call again with this offset
-    phones: sentPhones, // masked phones sent in this batch
+    grandTotal,
+    nextOffset,
+    phones: sentPhones,
     errors: errors.slice(0, 5),
   })
 }

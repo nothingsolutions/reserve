@@ -186,9 +186,13 @@ export default function AdminPage() {
   const [sendImageUrl, setSendImageUrl] = useState('')
   const [imagePreviewError, setImagePreviewError] = useState(false)
   const [sending, setSending] = useState(false)
-  const [sendResult, setSendResult] = useState<{ sent: number; total: number; errors?: string[] } | null>(null)
+  const [sendingTest, setSendingTest] = useState(false)
+  const [sendConfirmed, setSendConfirmed] = useState(false)
+  const [sendResult, setSendResult] = useState<{ sent: number; total: number; errors?: string[]; isTest?: boolean } | null>(null)
   const [sendError, setSendError] = useState('')
   const [sendProgress, setSendProgress] = useState<{ sent: number; grandTotal: number; log: string[] } | null>(null)
+  const [recipientCount, setRecipientCount] = useState<number | null>(null)
+  const [recipientCountLoading, setRecipientCountLoading] = useState(false)
 
   // Add event form
   const [evName, setEvName] = useState('')
@@ -258,6 +262,19 @@ export default function AdminPage() {
     if (tab === 'settings') fetchTemplate()
   }, [tab, fetchTemplate])
 
+  useEffect(() => {
+    if (tab !== 'send') return
+    let cancelled = false
+    setRecipientCount(null)
+    setRecipientCountLoading(true)
+    fetch(`/api/admin/send?target=${encodeURIComponent(sendTarget)}`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setRecipientCount(d.count ?? null) })
+      .catch(() => { if (!cancelled) setRecipientCount(null) })
+      .finally(() => { if (!cancelled) setRecipientCountLoading(false) })
+    return () => { cancelled = true }
+  }, [tab, sendTarget])
+
   const handleLogout = async () => {
     await fetch('/api/admin/logout', { method: 'POST' })
     router.push('/admin/login')
@@ -312,14 +329,47 @@ export default function AdminPage() {
         offset = data.nextOffset
       }
 
-      setSendResult({ sent: totalSent, total: grandTotal, errors: allErrors.slice(0, 5) })
+      setSendResult({ sent: totalSent, total: grandTotal, errors: allErrors.slice(0, 5), isTest: false })
       setSendMessage('Nothing Radio: ')
       setSendImageUrl('')
       setImagePreviewError(false)
+      setSendConfirmed(false)
     } catch {
       setSendError('Network error. Please try again.')
     } finally {
       setSending(false)
+    }
+  }
+
+  const handleSendTest = async () => {
+    setSendError('')
+    setSendResult(null)
+
+    const trimmedUrl = sendImageUrl.trim()
+    const mediaUrls = trimmedUrl.startsWith('https://') ? [trimmedUrl] : []
+
+    if (!sendMessage.trim() && mediaUrls.length === 0) {
+      setSendError('A message or image URL is required.')
+      return
+    }
+
+    setSendingTest(true)
+    try {
+      const res = await fetch('/api/admin/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: sendMessage, target: sendTarget, offset: 0, mediaUrls, test: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setSendError(data.error ?? 'Test send failed.')
+      } else {
+        setSendResult({ sent: data.sent, total: 1, errors: data.errors, isTest: true })
+      }
+    } catch {
+      setSendError('Network error. Please try again.')
+    } finally {
+      setSendingTest(false)
     }
   }
 
@@ -521,7 +571,7 @@ export default function AdminPage() {
               </label>
               <select
                 value={sendTarget}
-                onChange={(e) => setSendTarget(e.target.value)}
+                onChange={(e) => { setSendTarget(e.target.value); setSendConfirmed(false) }}
                 className="w-full bg-black border border-white/20 rounded-sm px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/50 transition-colors"
               >
                 <option value="all">Everyone on the list (all RSVPs, minus opt-outs)</option>
@@ -537,6 +587,13 @@ export default function AdminPage() {
                   </option>
                 ))}
               </select>
+              <p className="text-white/30 text-xs mt-1.5">
+                {recipientCountLoading
+                  ? 'Counting recipients…'
+                  : recipientCount !== null
+                    ? `${recipientCount} recipient${recipientCount !== 1 ? 's' : ''} (opt-outs excluded)`
+                    : ''}
+              </p>
             </div>
 
             {/* Message */}
@@ -635,19 +692,26 @@ export default function AdminPage() {
             )}
 
             {/* Final result */}
-            {!sending && sendResult && (
+            {!sending && !sendingTest && sendResult && (
               <div className="border border-white/10 rounded-sm px-4 py-3 space-y-2">
-                <p className="text-white text-sm">
-                  Sent to <span className="font-semibold">{sendResult.sent}</span> of{' '}
-                  <span className="font-semibold">{sendResult.total}</span> recipients.
-                </p>
+                {sendResult.isTest ? (
+                  <p className="text-white text-sm">
+                    Test sent to your phone.{' '}
+                    {sendResult.sent === 0 && <span className="text-red-400">Delivery failed — check errors below.</span>}
+                  </p>
+                ) : (
+                  <p className="text-white text-sm">
+                    Sent to <span className="font-semibold">{sendResult.sent}</span> of{' '}
+                    <span className="font-semibold">{sendResult.total}</span> recipients.
+                  </p>
+                )}
                 {sendResult.errors && sendResult.errors.length > 0 && (
                   <p className="text-red-400 text-xs">
                     {sendResult.errors.length} error(s): {sendResult.errors[0]}
                   </p>
                 )}
-                {/* Full log after completion */}
-                {sendProgress && sendProgress.log.length > 0 && (
+                {/* Full log after bulk send completion */}
+                {!sendResult.isTest && sendProgress && sendProgress.log.length > 0 && (
                   <div className="max-h-40 overflow-y-auto border-t border-white/10 pt-2 space-y-0.5">
                     <p className="text-white/20 text-xs uppercase tracking-widest mb-1">Sent to</p>
                     {sendProgress.log.map((line, i) => (
@@ -658,13 +722,38 @@ export default function AdminPage() {
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={sending}
-              className="w-full py-3 bg-white text-black font-semibold text-sm tracking-widest uppercase rounded-sm hover:bg-white/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {sending ? 'Sending…' : 'Send Message'}
-            </button>
+            {/* Confirmation checkbox — required before bulk send */}
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={sendConfirmed}
+                onChange={(e) => setSendConfirmed(e.target.checked)}
+                className="mt-0.5 flex-shrink-0 accent-white"
+              />
+              <span className="text-xs text-white/40 leading-relaxed">
+                I confirm I want to send this message to the selected audience.
+              </span>
+            </label>
+
+            {/* Action buttons */}
+            <div className="flex gap-3">
+              <button
+                type="submit"
+                disabled={sending || sendingTest || !sendConfirmed}
+                className="flex-1 py-3 bg-white text-black font-semibold text-sm tracking-widest uppercase rounded-sm hover:bg-white/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {sending ? 'Sending…' : 'Send Message'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSendTest}
+                disabled={sending || sendingTest}
+                className="px-5 py-3 border border-white/20 text-white/60 font-semibold text-sm tracking-widest uppercase rounded-sm hover:border-white/50 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {sendingTest ? 'Sending…' : 'Send Test'}
+              </button>
+            </div>
+            <p className="text-white/20 text-xs -mt-2">Test sends only to your phone.</p>
           </form>
         )}
 
