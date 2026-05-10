@@ -59,3 +59,15 @@ create policy "events_public_read" on events
 
 -- rsvps and opt_outs: no direct client access; all writes/reads go through the
 -- backend API with the service role key. No policies needed for client access.
+
+-- broadcast_log: one row per admin broadcast sent from the Send tab.
+-- Run in Supabase SQL editor if adding to an existing DB.
+create table if not exists broadcast_log (
+  id               uuid primary key default gen_random_uuid(),
+  body             text not null,
+  media_urls       text[],
+  target           text not null,   -- 'all', 'series:X', or event UUID
+  recipient_count  int  not null default 0,
+  sent_at          timestamptz not null default now()
+);
+alter table broadcast_log enable row level security;

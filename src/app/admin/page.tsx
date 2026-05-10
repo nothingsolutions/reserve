@@ -175,6 +175,55 @@ function PersonCard({ person }: { person: Person }) {
   )
 }
 
+// ── History Entry (reusable row) ───────────────────────────────────────────
+function HistoryEntry({ entry }: {
+  entry: {
+    id: string
+    body: string
+    media_urls: string[] | null
+    target_label: string
+    recipient_count: number
+    sent_at: string
+  }
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const preview = entry.body.length > 120 ? entry.body.slice(0, 120) + '…' : entry.body
+  const date = new Date(entry.sent_at)
+  const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+
+  return (
+    <div className="border border-white/10 rounded-sm px-4 py-3 space-y-1.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-white/60 text-xs">
+            {dateStr} at {timeStr} &middot; <span className="text-white/40">{entry.target_label}</span>
+            {entry.recipient_count > 0 && (
+              <span className="text-white/30"> &middot; {entry.recipient_count} sent</span>
+            )}
+          </p>
+        </div>
+        {entry.body.length > 120 && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="text-xs text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
+          >
+            {expanded ? 'Less' : 'More'}
+          </button>
+        )}
+      </div>
+      {entry.body && (
+        <p className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap">
+          {expanded ? entry.body : preview}
+        </p>
+      )}
+      {entry.media_urls && entry.media_urls.length > 0 && (
+        <p className="text-white/30 text-xs">+ image</p>
+      )}
+    </div>
+  )
+}
+
 // ── Main Admin Page ────────────────────────────────────────────────────────
 export default function AdminPage() {
   const router = useRouter()
@@ -197,6 +246,20 @@ export default function AdminPage() {
   const [sendProgress, setSendProgress] = useState<{ sent: number; grandTotal: number; log: string[] } | null>(null)
   const [recipientCount, setRecipientCount] = useState<number | null>(null)
   const [recipientCountLoading, setRecipientCountLoading] = useState(false)
+
+  // Message history
+  type BroadcastLog = {
+    id: string
+    body: string
+    media_urls: string[] | null
+    target: string
+    target_label: string
+    recipient_count: number
+    sent_at: string
+  }
+  const [messageHistory, setMessageHistory] = useState<BroadcastLog[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [historyExpanded, setHistoryExpanded] = useState(false)
 
   // Add event form
   const [evName, setEvName] = useState('')
@@ -266,8 +329,21 @@ export default function AdminPage() {
     if (tab === 'settings') fetchTemplate()
   }, [tab, fetchTemplate])
 
+  const fetchHistory = useCallback(async () => {
+    setLoadingHistory(true)
+    try {
+      const res = await fetch('/api/admin/messages')
+      if (res.status === 401) { router.push('/admin/login'); return }
+      const data = await res.json()
+      if (Array.isArray(data)) setMessageHistory(data)
+    } finally {
+      setLoadingHistory(false)
+    }
+  }, [router])
+
   useEffect(() => {
     if (tab !== 'send') return
+    fetchHistory()
     let cancelled = false
     setRecipientCount(null)
     setRecipientCountLoading(true)
@@ -277,7 +353,7 @@ export default function AdminPage() {
       .catch(() => { if (!cancelled) setRecipientCount(null) })
       .finally(() => { if (!cancelled) setRecipientCountLoading(false) })
     return () => { cancelled = true }
-  }, [tab, sendTarget])
+  }, [tab, sendTarget, fetchHistory])
 
   const handleLogout = async () => {
     await fetch('/api/admin/logout', { method: 'POST' })
@@ -334,6 +410,22 @@ export default function AdminPage() {
       }
 
       setSendResult({ sent: totalSent, total: grandTotal, errors: allErrors.slice(0, 5), isTest: false })
+
+      // Log the completed broadcast (fire-and-forget; don't block the UI)
+      const trimmedUrl = sendImageUrl.trim()
+      fetch('/api/admin/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          body: sendMessage,
+          mediaUrls: trimmedUrl.startsWith('https://') ? [trimmedUrl] : [],
+          target: sendTarget,
+          recipientCount: totalSent,
+        }),
+      })
+        .then(() => fetchHistory())
+        .catch(() => {/* non-critical */})
+
       setSendMessage('Nothing Radio: ')
       setSendImageUrl('')
       setImagePreviewError(false)
@@ -761,6 +853,33 @@ export default function AdminPage() {
             </div>
             <p className="text-white/20 text-xs -mt-2">Test sends only to your phone.</p>
           </form>
+        )}
+
+        {/* ── SEND TAB — Message History ── */}
+        {tab === 'send' && (
+          <div className="mt-8 space-y-3">
+            <button
+              onClick={() => setHistoryExpanded((v) => !v)}
+              className="flex items-center justify-between w-full text-left"
+            >
+              <p className="text-xs uppercase tracking-widest text-white/30">Message History</p>
+              <span className="text-white/30 text-xs">{historyExpanded ? '▲' : '▼'}</span>
+            </button>
+
+            {historyExpanded && (
+              loadingHistory ? (
+                <p className="text-white/30 text-sm">Loading…</p>
+              ) : messageHistory.length === 0 ? (
+                <p className="text-white/30 text-sm">No broadcasts yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {messageHistory.map((entry) => (
+                    <HistoryEntry key={entry.id} entry={entry} />
+                  ))}
+                </div>
+              )
+            )}
+          </div>
         )}
 
         {/* ── ADD EVENT TAB ── */}
