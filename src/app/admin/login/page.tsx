@@ -40,7 +40,11 @@ export default function AdminLogin() {
     <div className="min-h-screen bg-black flex items-center justify-center px-4">
       <div className="w-full max-w-xs space-y-8">
         <div className="text-center space-y-1">
-          <p className="text-xs uppercase tracking-widest text-white/30">Nothing Radio</p>
+          <img
+            src="https://images.squarespace-cdn.com/content/v1/6568f730596cc333d032cb51/15b3ef04-19e7-4102-80f7-b84e5f287e99/Asset+3.png?format=1500w"
+            alt="Nothing Radio"
+            className="mx-auto h-8 w-auto object-contain"
+          />
           <h1 className="text-xl font-semibold text-white">RSVP Admin</h1>
         </div>
 

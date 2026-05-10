@@ -60,7 +60,11 @@ export default function HowToPage() {
       {/* Header */}
       <div className="border-b border-white/10 px-5 py-4 flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-widest text-white/30">Nothing Radio</p>
+          <img
+            src="https://images.squarespace-cdn.com/content/v1/6568f730596cc333d032cb51/15b3ef04-19e7-4102-80f7-b84e5f287e99/Asset+3.png?format=1500w"
+            alt="Nothing Radio"
+            className="h-6 w-auto object-contain object-left mb-1"
+          />
           <h1 className="text-base font-semibold text-white">How To</h1>
         </div>
         <Link

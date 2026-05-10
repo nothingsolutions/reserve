@@ -109,9 +109,9 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if (existing) {
-      return twimlReply(
-        `Nothing Radio: You're already confirmed for ${nextEvent.name} on ${eventDate}. See you there.`
-      )
+      const tmpl = await getSmsTemplate()
+      const alreadyConfirmedMsg = interpolateSmsTemplate(tmpl, { eventName: nextEvent.name, eventDate })
+      return twimlReply(alreadyConfirmedMsg)
     }
 
     // Insert RSVP
