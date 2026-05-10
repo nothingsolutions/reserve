@@ -26,7 +26,7 @@ type Person = {
   first_seen: string
 }
 
-type Tab = 'events' | 'people' | 'send' | 'add-event'
+type Tab = 'events' | 'people' | 'send' | 'add-event' | 'settings'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function fmtDate(iso: string) {
@@ -200,6 +200,28 @@ export default function AdminPage() {
   const [newEventId, setNewEventId] = useState('')
   const [newEventIframe, setNewEventIframe] = useState('')
 
+  // Settings — SMS template
+  const DEFAULT_TEMPLATE = "Nothing Radio: You're confirmed for {eventName} on {eventDate}. See you there! Reply STOP to opt out."
+  const [smsTemplate, setSmsTemplate] = useState(DEFAULT_TEMPLATE)
+  const [savedTemplate, setSavedTemplate] = useState<string | null>(null)
+  const [loadingTemplate, setLoadingTemplate] = useState(false)
+  const [savingTemplate, setSavingTemplate] = useState(false)
+  const [templateError, setTemplateError] = useState('')
+  const [templateSuccess, setTemplateSuccess] = useState('')
+
+  const fetchTemplate = useCallback(async () => {
+    setLoadingTemplate(true)
+    try {
+      const res = await fetch('/api/admin/sms-template')
+      if (res.status === 401) { router.push('/admin/login'); return }
+      const data = await res.json()
+      setSavedTemplate(data.template)
+      setSmsTemplate(data.template ?? data.default)
+    } finally {
+      setLoadingTemplate(false)
+    }
+  }, [router])
+
   const fetchEvents = useCallback(async () => {
     setLoadingEvents(true)
     try {
@@ -229,6 +251,10 @@ export default function AdminPage() {
   useEffect(() => {
     if (tab === 'people' && people.length === 0) fetchPeople()
   }, [tab, people.length, fetchPeople])
+
+  useEffect(() => {
+    if (tab === 'settings') fetchTemplate()
+  }, [tab, fetchTemplate])
 
   const handleLogout = async () => {
     await fetch('/api/admin/logout', { method: 'POST' })
@@ -286,6 +312,59 @@ export default function AdminPage() {
     }
   }
 
+  const handleSaveTemplate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setTemplateError('')
+    setTemplateSuccess('')
+    if (!smsTemplate.trim()) { setTemplateError('Template cannot be empty.'); return }
+    setSavingTemplate(true)
+    try {
+      const res = await fetch('/api/admin/sms-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template: smsTemplate.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setTemplateError(data.error ?? 'Failed to save.')
+      } else {
+        setSavedTemplate(data.template)
+        setTemplateSuccess('Saved.')
+        setTimeout(() => setTemplateSuccess(''), 3000)
+      }
+    } catch {
+      setTemplateError('Network error. Please try again.')
+    } finally {
+      setSavingTemplate(false)
+    }
+  }
+
+  const handleRevertTemplate = async () => {
+    setTemplateError('')
+    setTemplateSuccess('')
+    setSavingTemplate(true)
+    try {
+      const res = await fetch('/api/admin/sms-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template: null }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setTemplateError(data.error ?? 'Failed to revert.')
+      } else {
+        setSavedTemplate(null)
+        setSmsTemplate(DEFAULT_TEMPLATE)
+        setTemplateSuccess('Reverted to default.')
+        setTimeout(() => setTemplateSuccess(''), 3000)
+      }
+    } catch {
+      setTemplateError('Network error. Please try again.')
+    } finally {
+      setSavingTemplate(false)
+    }
+  }
+
   const handleAddEvent = async (e: React.FormEvent) => {
     e.preventDefault()
     setAddEventError('')
@@ -323,6 +402,7 @@ export default function AdminPage() {
     { id: 'people', label: 'People' },
     { id: 'send', label: 'Send' },
     { id: 'add-event', label: '+ Event' },
+    { id: 'settings', label: 'Settings' },
   ]
 
   return (
@@ -630,6 +710,79 @@ export default function AdminPage() {
             >
               {addingEvent ? 'Creating…' : 'Create Event'}
             </button>
+          </form>
+        )}
+
+        {/* ── SETTINGS TAB ── */}
+        {tab === 'settings' && (
+          <form onSubmit={handleSaveTemplate} className="space-y-5">
+            <p className="text-xs uppercase tracking-widest text-white/30">Confirmation SMS</p>
+
+            <p className="text-white/40 text-xs leading-relaxed">
+              Sent to everyone who RSVPs — whether via the web widget or by texting a keyword.
+              Use <span className="font-mono text-white/60">{'{eventName}'}</span> and{' '}
+              <span className="font-mono text-white/60">{'{eventDate}'}</span> as placeholders.
+            </p>
+
+            {loadingTemplate ? (
+              <p className="text-white/30 text-sm">Loading…</p>
+            ) : (
+              <>
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs uppercase tracking-widest text-white/40">
+                      Message template
+                    </label>
+                    {savedTemplate !== null && (
+                      <span className="text-[10px] uppercase tracking-widest text-white/30 border border-white/10 rounded-sm px-1.5 py-0.5">
+                        Custom
+                      </span>
+                    )}
+                  </div>
+                  <textarea
+                    value={smsTemplate}
+                    onChange={(e) => { setSmsTemplate(e.target.value); setTemplateSuccess('') }}
+                    rows={4}
+                    required
+                    className="w-full bg-transparent border border-white/20 rounded-sm px-3 py-2.5 text-white placeholder-white/20 focus:outline-none focus:border-white/50 text-sm transition-colors resize-none"
+                  />
+                  <p className="text-white/20 text-xs mt-1">{smsTemplate.length} characters</p>
+                </div>
+
+                {/* Live preview */}
+                <div className="border border-white/10 rounded-sm px-4 py-3 space-y-1">
+                  <p className="text-xs uppercase tracking-widest text-white/20">Preview</p>
+                  <p className="text-white/60 text-sm leading-relaxed">
+                    {smsTemplate
+                      .replace('{eventName}', 'Sample Event')
+                      .replace('{eventDate}', 'Saturday, June 7') || (
+                      <span className="text-white/20 italic">Enter a template above</span>
+                    )}
+                  </p>
+                </div>
+
+                {templateError && <p className="text-red-400 text-xs">{templateError}</p>}
+                {templateSuccess && <p className="text-green-400 text-xs">{templateSuccess}</p>}
+
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    disabled={savingTemplate}
+                    className="flex-1 py-3 bg-white text-black font-semibold text-sm tracking-widest uppercase rounded-sm hover:bg-white/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {savingTemplate ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRevertTemplate}
+                    disabled={savingTemplate || savedTemplate === null}
+                    className="flex-1 py-3 border border-white/20 text-white/50 font-semibold text-sm tracking-widest uppercase rounded-sm hover:border-white/50 hover:text-white/80 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    Revert to default
+                  </button>
+                </div>
+              </>
+            )}
           </form>
         )}
       </div>

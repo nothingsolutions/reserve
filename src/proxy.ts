@@ -42,6 +42,7 @@ const PROTECTED_ADMIN_ROUTES = [
   '/api/admin/events',
   '/api/admin/people',
   '/api/admin/send',
+  '/api/admin/sms-template',
   '/api/admin/logout',
 ]
 

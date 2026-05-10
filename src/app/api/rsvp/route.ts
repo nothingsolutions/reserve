@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { sendSMS } from '@/lib/twilio'
 import { rateLimit } from '@/lib/rate-limit'
 import { notifyNewRsvp } from '@/lib/email'
+import { getSmsTemplate, interpolateSmsTemplate } from '@/lib/sms-confirmation-template'
 
 export function normalizePhone(raw: string): string | null {
   let digits = raw.replace(/\D/g, '')
@@ -99,9 +100,10 @@ export async function POST(req: NextRequest) {
     month: 'long',
     day: 'numeric',
   })
-  const smsBody = `Nothing Radio: You're confirmed for ${event.name} on ${eventDate}. See you there! Reply STOP to opt out.`
 
   try {
+    const tmpl = await getSmsTemplate()
+    const smsBody = interpolateSmsTemplate(tmpl, { eventName: event.name, eventDate })
     await sendSMS(normalizedPhone, smsBody)
   } catch (err) {
     console.error('Confirmation SMS failed:', (err as Error).message?.slice(0, 80))

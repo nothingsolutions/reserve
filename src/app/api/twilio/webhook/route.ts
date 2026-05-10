@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { validateTwilioSignature } from '@/lib/twilio'
 import { notifyNewRsvp } from '@/lib/email'
+import { getSmsTemplate, interpolateSmsTemplate } from '@/lib/sms-confirmation-template'
 
 function normalizePhone(raw: string): string {
   const digits = raw.replace(/\D/g, '')
@@ -11,7 +12,7 @@ function normalizePhone(raw: string): string {
 }
 
 function twimlReply(message: string): NextResponse {
-  const body = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${message}</Message></Response>`
+  const body = `<?xml version="1.0" encoding="UTF-8"?><Response><Message><![CDATA[${message}]]></Message></Response>`
   return new NextResponse(body, { headers: { 'Content-Type': 'text/xml' } })
 }
 
@@ -98,10 +99,6 @@ export async function POST(req: NextRequest) {
       month: 'long',
       day: 'numeric',
     })
-    const eventTime = new Date(nextEvent.date).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-    })
 
     // Check if already RSVP'd
     const { data: existing } = await supabase()
@@ -130,9 +127,9 @@ export async function POST(req: NextRequest) {
       console.error('RSVP notification email failed:', (err as Error).message?.slice(0, 120))
     )
 
-    return twimlReply(
-      `Nothing Radio: You're confirmed for ${nextEvent.name} on ${eventDate}, ${eventTime}. Reply STOP to opt out.`
-    )
+    const tmpl = await getSmsTemplate()
+    const confirmMsg = interpolateSmsTemplate(tmpl, { eventName: nextEvent.name, eventDate })
+    return twimlReply(confirmMsg)
   }
 
   // All other messages — no response

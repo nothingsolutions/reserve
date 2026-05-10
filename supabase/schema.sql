@@ -34,15 +34,24 @@ create table if not exists opt_outs (
 -- Add series column to events (safe to run on existing schema)
 alter table events add column if not exists series text;
 
+-- app_settings: singleton row (id must be 1) for admin-editable settings.
+-- sms_confirm_template: NULL means use the built-in default in code.
+create table if not exists app_settings (
+  id                   smallint primary key default 1 check (id = 1),
+  sms_confirm_template text,
+  updated_at           timestamptz not null default now()
+);
+
 -- Indexes
 create index if not exists rsvps_event_id_idx on rsvps(event_id);
 create index if not exists rsvps_phone_idx on rsvps(phone);
 create index if not exists events_series_idx on events(series);
 
 -- Row Level Security
-alter table events    enable row level security;
-alter table rsvps     enable row level security;
-alter table opt_outs  enable row level security;
+alter table events       enable row level security;
+alter table rsvps        enable row level security;
+alter table opt_outs     enable row level security;
+alter table app_settings enable row level security;
 
 -- Events are publicly readable (widget needs to show event details; no PII)
 create policy "events_public_read" on events
