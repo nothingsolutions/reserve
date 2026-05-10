@@ -8,6 +8,8 @@ type PersonEntry = {
   first_seen: string
 }
 
+type PersonResponse = PersonEntry & { unsubscribed: boolean }
+
 // GET /api/admin/people — unique people with all events they've RSVP'd to
 export async function GET() {
   const { data: rsvps, error } = await supabase()
@@ -18,6 +20,9 @@ export async function GET() {
   if (error) {
     return NextResponse.json({ error: 'Failed to fetch people' }, { status: 500 })
   }
+
+  const { data: optOutRows } = await supabase().from('opt_outs').select('phone')
+  const optOutSet = new Set((optOutRows ?? []).map((o) => o.phone))
 
   const map = new Map<string, PersonEntry>()
 
@@ -42,9 +47,9 @@ export async function GET() {
     }
   }
 
-  const people = Array.from(map.values()).sort(
-    (a, b) => new Date(b.first_seen).getTime() - new Date(a.first_seen).getTime()
-  )
+  const people: PersonResponse[] = Array.from(map.values())
+    .map((p) => ({ ...p, unsubscribed: optOutSet.has(p.phone) }))
+    .sort((a, b) => new Date(b.first_seen).getTime() - new Date(a.first_seen).getTime())
 
   return NextResponse.json(people)
 }

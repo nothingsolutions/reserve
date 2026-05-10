@@ -25,6 +25,7 @@ type Person = {
   phone: string
   events: { id: string; name: string; date: string }[]
   first_seen: string
+  unsubscribed: boolean
 }
 
 type Tab = 'events' | 'people' | 'send' | 'add-event' | 'settings'
@@ -143,7 +144,14 @@ function PersonCard({ person }: { person: Person }) {
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors text-left gap-4"
       >
         <div className="min-w-0">
-          <p className="text-white text-sm font-medium truncate">{person.name}</p>
+          <div className="flex items-center gap-2 min-w-0">
+            <p className="text-white text-sm font-medium truncate">{person.name}</p>
+            {person.unsubscribed && (
+              <span className="flex-shrink-0 text-[10px] uppercase tracking-widest text-red-400 border border-red-500/40 rounded-sm px-1.5 py-0.5">
+                Unsubscribed
+              </span>
+            )}
+          </div>
           <p className="text-white/30 text-xs font-mono mt-0.5">{maskPhone(person.phone)}</p>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
