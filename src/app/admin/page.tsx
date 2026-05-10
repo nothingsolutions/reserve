@@ -584,6 +584,25 @@ export default function AdminPage() {
               )}
             </div>
 
+            {/* Message preview */}
+            {(sendMessage.trim() || sendImageUrl.trim().startsWith('https://')) && (
+              <div className="border border-white/10 rounded-sm px-4 py-3 space-y-2">
+                <p className="text-xs uppercase tracking-widest text-white/20">Preview</p>
+                {sendImageUrl.trim().startsWith('https://') && !imagePreviewError && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={sendImageUrl.trim()}
+                    alt=""
+                    onError={() => setImagePreviewError(true)}
+                    className="max-h-40 max-w-full rounded-sm object-contain"
+                  />
+                )}
+                {sendMessage.trim() && (
+                  <p className="text-white/60 text-sm leading-relaxed">{sendMessage.trim()}</p>
+                )}
+              </div>
+            )}
+
             {sendError && <p className="text-red-400 text-xs">{sendError}</p>}
 
             {/* Live send progress */}
