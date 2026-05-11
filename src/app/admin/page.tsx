@@ -300,6 +300,30 @@ export default function AdminPage() {
     }
   }, [router])
 
+  // Settings — welcome message
+  const DEFAULT_WELCOME = "Welcome to Nothing Radio. You're confirmed for {eventName} on {eventDate}. Save this number to stay in the loop. Reply STOP to opt out."
+  const [welcomeEnabled, setWelcomeEnabled] = useState(false)
+  const [welcomeText, setWelcomeText] = useState(DEFAULT_WELCOME)
+  const [savedWelcomeText, setSavedWelcomeText] = useState<string | null>(null)
+  const [loadingWelcome, setLoadingWelcome] = useState(false)
+  const [savingWelcome, setSavingWelcome] = useState(false)
+  const [welcomeError, setWelcomeError] = useState('')
+  const [welcomeSuccess, setWelcomeSuccess] = useState('')
+
+  const fetchWelcomeSettings = useCallback(async () => {
+    setLoadingWelcome(true)
+    try {
+      const res = await fetch('/api/admin/welcome-settings')
+      if (res.status === 401) { router.push('/admin/login'); return }
+      const data = await res.json()
+      setWelcomeEnabled(data.enabled ?? false)
+      setSavedWelcomeText(data.text)
+      setWelcomeText(data.text ?? data.default)
+    } finally {
+      setLoadingWelcome(false)
+    }
+  }, [router])
+
   const fetchEvents = useCallback(async () => {
     setLoadingEvents(true)
     try {
@@ -347,8 +371,11 @@ export default function AdminPage() {
   }, [tab, people.length, peopleTotal, fetchPeople])
 
   useEffect(() => {
-    if (tab === 'settings') fetchTemplate()
-  }, [tab, fetchTemplate])
+    if (tab === 'settings') {
+      fetchTemplate()
+      fetchWelcomeSettings()
+    }
+  }, [tab, fetchTemplate, fetchWelcomeSettings])
 
   const fetchHistory = useCallback(async () => {
     setLoadingHistory(true)
@@ -540,6 +567,62 @@ export default function AdminPage() {
       setTemplateError('Network error. Please try again.')
     } finally {
       setSavingTemplate(false)
+    }
+  }
+
+  const handleSaveWelcome = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setWelcomeError('')
+    setWelcomeSuccess('')
+    if (welcomeEnabled && !welcomeText.trim()) {
+      setWelcomeError('Message cannot be empty.')
+      return
+    }
+    setSavingWelcome(true)
+    try {
+      const res = await fetch('/api/admin/welcome-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: welcomeEnabled, text: welcomeText.trim() || null }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setWelcomeError(data.error ?? 'Failed to save.')
+      } else {
+        setSavedWelcomeText(welcomeText.trim() || null)
+        setWelcomeSuccess('Saved.')
+        setTimeout(() => setWelcomeSuccess(''), 3000)
+      }
+    } catch {
+      setWelcomeError('Network error. Please try again.')
+    } finally {
+      setSavingWelcome(false)
+    }
+  }
+
+  const handleRevertWelcome = async () => {
+    setWelcomeError('')
+    setWelcomeSuccess('')
+    setSavingWelcome(true)
+    try {
+      const res = await fetch('/api/admin/welcome-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: null }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setWelcomeError(data.error ?? 'Failed to revert.')
+      } else {
+        setSavedWelcomeText(null)
+        setWelcomeText(DEFAULT_WELCOME)
+        setWelcomeSuccess('Reverted to default.')
+        setTimeout(() => setWelcomeSuccess(''), 3000)
+      }
+    } catch {
+      setWelcomeError('Network error. Please try again.')
+    } finally {
+      setSavingWelcome(false)
     }
   }
 
@@ -1065,75 +1148,178 @@ export default function AdminPage() {
 
         {/* ── SETTINGS TAB ── */}
         {tab === 'settings' && (
-          <form onSubmit={handleSaveTemplate} className="space-y-5">
-            <p className="text-xs uppercase tracking-widest text-white/30">Confirmation SMS</p>
+          <div className="space-y-10">
 
-            <p className="text-white/40 text-xs leading-relaxed">
-              Sent to everyone who RSVPs — whether via the web widget or by texting a keyword.
-              Use <span className="font-mono text-white/60">{'{eventName}'}</span> and{' '}
-              <span className="font-mono text-white/60">{'{eventDate}'}</span> as placeholders.
-            </p>
+            {/* Confirmation SMS */}
+            <form onSubmit={handleSaveTemplate} className="space-y-5">
+              <p className="text-xs uppercase tracking-widest text-white/30">Confirmation SMS</p>
 
-            {loadingTemplate ? (
-              <p className="text-white/30 text-sm">Loading…</p>
-            ) : (
-              <>
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs uppercase tracking-widest text-white/40">
-                      Message template
-                    </label>
-                    {savedTemplate !== null && (
-                      <span className="text-[10px] uppercase tracking-widest text-white/30 border border-white/10 rounded-sm px-1.5 py-0.5">
-                        Custom
-                      </span>
-                    )}
+              <p className="text-white/40 text-xs leading-relaxed">
+                Sent to everyone who RSVPs — whether via the web widget or by texting a keyword.
+                Use <span className="font-mono text-white/60">{'{eventName}'}</span> and{' '}
+                <span className="font-mono text-white/60">{'{eventDate}'}</span> as placeholders.
+              </p>
+
+              {loadingTemplate ? (
+                <p className="text-white/30 text-sm">Loading…</p>
+              ) : (
+                <>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs uppercase tracking-widest text-white/40">
+                        Message template
+                      </label>
+                      {savedTemplate !== null && (
+                        <span className="text-[10px] uppercase tracking-widest text-white/30 border border-white/10 rounded-sm px-1.5 py-0.5">
+                          Custom
+                        </span>
+                      )}
+                    </div>
+                    <textarea
+                      value={smsTemplate}
+                      onChange={(e) => { setSmsTemplate(e.target.value); setTemplateSuccess('') }}
+                      rows={4}
+                      required
+                      className="w-full bg-transparent border border-white/20 rounded-sm px-3 py-2.5 text-white placeholder-white/20 focus:outline-none focus:border-white/50 text-sm transition-colors resize-none"
+                    />
+                    <p className="text-white/20 text-xs mt-1">{smsTemplate.length} characters</p>
                   </div>
-                  <textarea
-                    value={smsTemplate}
-                    onChange={(e) => { setSmsTemplate(e.target.value); setTemplateSuccess('') }}
-                    rows={4}
-                    required
-                    className="w-full bg-transparent border border-white/20 rounded-sm px-3 py-2.5 text-white placeholder-white/20 focus:outline-none focus:border-white/50 text-sm transition-colors resize-none"
-                  />
-                  <p className="text-white/20 text-xs mt-1">{smsTemplate.length} characters</p>
-                </div>
 
-                {/* Live preview */}
-                <div className="border border-white/10 rounded-sm px-4 py-3 space-y-1">
-                  <p className="text-xs uppercase tracking-widest text-white/20">Preview</p>
-                  <p className="text-white/60 text-sm leading-relaxed">
-                    {smsTemplate
-                      .replace('{eventName}', 'Sample Event')
-                      .replace('{eventDate}', 'Saturday, June 7') || (
-                      <span className="text-white/20 italic">Enter a template above</span>
-                    )}
-                  </p>
-                </div>
+                  {/* Live preview */}
+                  <div className="border border-white/10 rounded-sm px-4 py-3 space-y-1">
+                    <p className="text-xs uppercase tracking-widest text-white/20">Preview</p>
+                    <p className="text-white/60 text-sm leading-relaxed">
+                      {smsTemplate
+                        .replace('{eventName}', 'Sample Event')
+                        .replace('{eventDate}', 'Saturday, June 7') || (
+                        <span className="text-white/20 italic">Enter a template above</span>
+                      )}
+                    </p>
+                  </div>
 
-                {templateError && <p className="text-red-400 text-xs">{templateError}</p>}
-                {templateSuccess && <p className="text-green-400 text-xs">{templateSuccess}</p>}
+                  {templateError && <p className="text-red-400 text-xs">{templateError}</p>}
+                  {templateSuccess && <p className="text-green-400 text-xs">{templateSuccess}</p>}
 
-                <div className="flex gap-3">
-                  <button
-                    type="submit"
-                    disabled={savingTemplate}
-                    className="flex-1 py-3 bg-white text-black font-semibold text-sm tracking-widest uppercase rounded-sm hover:bg-white/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {savingTemplate ? 'Saving…' : 'Save'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleRevertTemplate}
-                    disabled={savingTemplate || savedTemplate === null}
-                    className="flex-1 py-3 border border-white/20 text-white/50 font-semibold text-sm tracking-widest uppercase rounded-sm hover:border-white/50 hover:text-white/80 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                  >
-                    Revert to default
-                  </button>
-                </div>
-              </>
-            )}
-          </form>
+                  <div className="flex gap-3">
+                    <button
+                      type="submit"
+                      disabled={savingTemplate}
+                      className="flex-1 py-3 bg-white text-black font-semibold text-sm tracking-widest uppercase rounded-sm hover:bg-white/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {savingTemplate ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRevertTemplate}
+                      disabled={savingTemplate || savedTemplate === null}
+                      className="flex-1 py-3 border border-white/20 text-white/50 font-semibold text-sm tracking-widest uppercase rounded-sm hover:border-white/50 hover:text-white/80 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      Revert to default
+                    </button>
+                  </div>
+                </>
+              )}
+            </form>
+
+            {/* Divider */}
+            <div className="border-t border-white/10" />
+
+            {/* Welcome Message */}
+            <form onSubmit={handleSaveWelcome} className="space-y-5">
+              <p className="text-xs uppercase tracking-widest text-white/30">Welcome Message</p>
+
+              <p className="text-white/40 text-xs leading-relaxed">
+                Sent once to new subscribers the first time they RSVP — includes a contact card
+                attachment so they can save this number. Supports{' '}
+                <span className="font-mono text-white/60">{'{eventName}'}</span> and{' '}
+                <span className="font-mono text-white/60">{'{eventDate}'}</span>.
+              </p>
+
+              {loadingWelcome ? (
+                <p className="text-white/30 text-sm">Loading…</p>
+              ) : (
+                <>
+                  {/* Toggle */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/70 text-sm">Send welcome message</span>
+                    <button
+                      type="button"
+                      onClick={() => setWelcomeEnabled((v) => !v)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                        welcomeEnabled ? 'bg-white' : 'bg-white/20'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-black transition-transform ${
+                          welcomeEnabled ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {welcomeEnabled && (
+                    <>
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs uppercase tracking-widest text-white/40">
+                            Message text
+                          </label>
+                          {savedWelcomeText !== null && (
+                            <span className="text-[10px] uppercase tracking-widest text-white/30 border border-white/10 rounded-sm px-1.5 py-0.5">
+                              Custom
+                            </span>
+                          )}
+                        </div>
+                        <textarea
+                          value={welcomeText}
+                          onChange={(e) => { setWelcomeText(e.target.value); setWelcomeSuccess('') }}
+                          rows={4}
+                          required
+                          className="w-full bg-transparent border border-white/20 rounded-sm px-3 py-2.5 text-white placeholder-white/20 focus:outline-none focus:border-white/50 text-sm transition-colors resize-none"
+                        />
+                        <p className="text-white/20 text-xs mt-1">{welcomeText.length} characters</p>
+                      </div>
+
+                      {/* Live preview */}
+                      <div className="border border-white/10 rounded-sm px-4 py-3 space-y-1">
+                        <p className="text-xs uppercase tracking-widest text-white/20">Preview</p>
+                        <p className="text-white/60 text-sm leading-relaxed">
+                          {welcomeText
+                            .replace('{eventName}', 'Sample Event')
+                            .replace('{eventDate}', 'Saturday, June 7') || (
+                            <span className="text-white/20 italic">Enter a message above</span>
+                          )}
+                        </p>
+                        <p className="text-white/20 text-xs pt-1">+ contact card attachment</p>
+                      </div>
+                    </>
+                  )}
+
+                  {welcomeError && <p className="text-red-400 text-xs">{welcomeError}</p>}
+                  {welcomeSuccess && <p className="text-green-400 text-xs">{welcomeSuccess}</p>}
+
+                  <div className="flex gap-3">
+                    <button
+                      type="submit"
+                      disabled={savingWelcome}
+                      className="flex-1 py-3 bg-white text-black font-semibold text-sm tracking-widest uppercase rounded-sm hover:bg-white/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {savingWelcome ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRevertWelcome}
+                      disabled={savingWelcome || savedWelcomeText === null}
+                      className="flex-1 py-3 border border-white/20 text-white/50 font-semibold text-sm tracking-widest uppercase rounded-sm hover:border-white/50 hover:text-white/80 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    >
+                      Revert to default
+                    </button>
+                  </div>
+                </>
+              )}
+            </form>
+
+          </div>
         )}
       </div>
     </div>

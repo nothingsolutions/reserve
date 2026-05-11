@@ -54,7 +54,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 3. Add all env vars from `.env.local` to the Vercel project (Settings > Environment Variables).
 4. Deploy. Note your app URL (e.g. `https://your-app.vercel.app`).
 5. Update `APP_URL` in Vercel env vars to match your deployed URL.
-6. Set the Twilio inbound webhook (step 2.4 above).
+6. **Welcome MMS contact card:** set `VCARD_URL` to your public vCard URL if the file is not served from this app (e.g. `https://nothingradio.com/s/nothing-radio.vcf`). If unset, the app uses `APP_URL/nothing-radio.vcf` (the file in `public/`).
+7. Set the Twilio inbound webhook (step 2.4 above).
 
 ### 5. Add the iframe to Squarespace
 

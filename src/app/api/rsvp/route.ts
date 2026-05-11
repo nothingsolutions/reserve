@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
-import { sendSMS } from '@/lib/twilio'
+import { sendSMS, sendMessage } from '@/lib/twilio'
 import { rateLimit } from '@/lib/rate-limit'
 import { notifyNewRsvp } from '@/lib/email'
 import { getSmsTemplate, interpolateSmsTemplate } from '@/lib/sms-confirmation-template'
 import { formatEventDateLong } from '@/lib/eventTimezone'
+import {
+  upsertSubscriber,
+  isFirstSubscriber,
+  getWelcomeSettings,
+  buildWelcomeBody,
+  markWelcomeSent,
+  getVCardUrl,
+} from '@/lib/welcome-vcard'
 
 export function normalizePhone(raw: string): string | null {
   let digits = raw.replace(/\D/g, '')
@@ -99,13 +107,33 @@ export async function POST(req: NextRequest) {
 
   const returning = !!prior
 
-  // Send confirmation SMS (non-fatal if it fails — RSVP is already stored)
-  const eventDate = formatEventDateLong(event.date)
+  // Ensure subscriber row exists (non-fatal — RSVP is already stored)
+  await upsertSubscriber(normalizedPhone, trimmedName)
 
+  const eventDate = formatEventDateLong(event.date)
+  const templateVars = { eventName: event.name, eventDate }
+
+  // Send confirmation / welcome SMS (non-fatal if it fails — RSVP is already stored)
   try {
-    const tmpl = await getSmsTemplate()
-    const smsBody = interpolateSmsTemplate(tmpl, { eventName: event.name, eventDate })
-    await sendSMS(normalizedPhone, smsBody)
+    const firstTimer = await isFirstSubscriber(normalizedPhone)
+
+    if (firstTimer) {
+      const welcome = await getWelcomeSettings()
+      if (welcome.enabled) {
+        // First-ever subscriber + welcome on: send MMS with vCard attachment
+        const body = buildWelcomeBody(welcome.text, templateVars)
+        await sendMessage(normalizedPhone, body, [getVCardUrl()])
+        await markWelcomeSent(normalizedPhone)
+      } else {
+        // First-ever subscriber + welcome off: regular confirmation SMS, leave welcome_sent_at NULL
+        const tmpl = await getSmsTemplate()
+        await sendSMS(normalizedPhone, interpolateSmsTemplate(tmpl, templateVars))
+      }
+    } else {
+      // Returning subscriber: regular confirmation SMS
+      const tmpl = await getSmsTemplate()
+      await sendSMS(normalizedPhone, interpolateSmsTemplate(tmpl, templateVars))
+    }
   } catch (err) {
     console.error('Confirmation SMS failed:', (err as Error).message?.slice(0, 80))
   }

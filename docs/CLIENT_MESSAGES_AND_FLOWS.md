@@ -4,29 +4,50 @@ All user-facing copy: SMS texts, widget screens, and API error messages. Use thi
 
 ---
 
-## 1. SMS (Twilio) — Outbound Only
+## 1. SMS (Twilio) -- Outbound Only
 
-The app **sends** SMS in two cases. It does **not** send any automated reply when someone texts STOP; Twilio handles opt-out compliance.
+The app **sends** SMS/MMS in three cases. It does **not** send any automated reply when someone texts STOP; Twilio handles opt-out compliance.
 
-### 1.1 Confirmation after RSVP
+### 1.1 Welcome MMS (first-time subscribers only)
 
-**When:** User submits the RSVP form and is successfully saved (first time for that event + phone).
+**When:** A phone number RSVPs for the very first time AND the welcome message is **enabled** in Settings.
+
+**Source:** `src/app/api/rsvp/route.ts` (web RSVP), `src/app/api/twilio/webhook/route.ts` (SMS keyword RSVP)
+
+**Type:** MMS -- includes a `.vcf` contact card attachment. The URL comes from the `VCARD_URL` env var (recommended when the file is on Squarespace, e.g. `https://nothingradio.com/s/nothing-radio.vcf`), or falls back to `APP_URL` + `/nothing-radio.vcf` from this app's `public/` folder.
+
+**Message (editable in Settings -> Welcome Message):**
+```
+Welcome to Nothing Radio. You're confirmed for {eventName} on {eventDate}. Save this number to stay in the loop. Reply STOP to opt out.
+```
+
+**Toggle:** Admin can enable/disable this in Settings. When **off**, first-timers receive the regular confirmation SMS (section 1.2) instead. The toggle defaults to **off** -- you must explicitly enable it.
+
+**Tracking:** `subscribers.welcome_sent_at` is set after a successful send. Subsequent RSVPs by the same phone never trigger this message again.
+
+**One-off backfill for existing subscribers:** Use the Send tab -> "Everyone on the list" with the media URL field set to your public vCard URL (same as `VCARD_URL`, or `https://YOUR_APP_URL/nothing-radio.vcf` if you host it only on the app).
+
+---
+
+### 1.2 Confirmation after RSVP
+
+**When:** User submits the RSVP form and is successfully saved (first time for that event + phone). Sent to **all** subscribers except first-timers who received the welcome MMS instead.
 
 **Source:** `src/app/api/rsvp/route.ts`
 
-**Message (template):**
+**Message (template, editable in Settings -> Confirmation SMS):**
 ```
-You're confirmed for {event.name} on {eventDate}. See you there! Reply STOP to opt out.
+Nothing Radio: You're confirmed for {eventName} on {eventDate}. See you there! Reply STOP to opt out.
 ```
 
-**Example:**  
-`You're confirmed for Get a Room 24 on Saturday, March 15. See you there! Reply STOP to opt out.`
+**Example:**
+`Nothing Radio: You're confirmed for Get a Room 24 on Saturday, March 15. See you there! Reply STOP to opt out.`
 
 *(`eventDate` is formatted as weekday + month + day, e.g. "Saturday, March 15".)*
 
 ---
 
-### 1.2 One-off message (admin)
+### 1.3 One-off message (admin)
 
 **When:** Admin uses the **Send** tab and chooses "Everyone on the list" or a specific event, then sends.
 
@@ -34,11 +55,11 @@ You're confirmed for {event.name} on {eventDate}. See you there! Reply STOP to o
 
 **Message:** Exactly what the admin types in the message field. No prefix or suffix is added by the app. Recipients are all (unique) RSVPs in the chosen scope, minus anyone in the `opt_outs` table.
 
-**Flow:** Admin enters message → API sends that string to each phone via Twilio. No "Thanks for RSVPing" or other default text unless the admin includes it.
+**Flow:** Admin enters message -> API sends that string to each phone via Twilio. Supports an optional media URL for MMS (e.g. attaching the contact card or a flyer image).
 
 ---
 
-## 2. Widget (RSVP iframe) — On-Screen Copy
+## 2. Widget (RSVP iframe) -- On-Screen Copy
 
 **Source:** `src/app/rsvp-widget/RSVPWidget.tsx`
 
@@ -78,10 +99,10 @@ Shown when the same phone RSVPs again for the same event.
 - **Optional:** Event description below.
 - **Labels:** "Name", "Phone Number".
 - **Placeholders:** "Your name", "(555) 123-4567".
-- **Consent (full text):**  
-  "By submitting, you agree to receive updates and reminders via SMS. Msg & data rates may apply. Reply STOP to opt out at any time. Terms & Privacy."  
-  *(Terms → https://nothingradio.com/tos, Privacy → https://nothingradio.com/privacy-policy.)*
-- **Submit button:** "RSVP" (or "Confirming…" while submitting).
+- **Consent (full text):**
+  "By submitting, you agree to receive updates and reminders via SMS. Msg & data rates may apply. Reply STOP to opt out at any time. Terms & Privacy."
+  *(Terms -> https://nothingradio.com/tos, Privacy -> https://nothingradio.com/privacy-policy.)*
+- **Submit button:** "RSVP" (or "Confirming..." while submitting).
 - **Inline errors:** Shown from API (see section 3).
 
 ---
@@ -109,18 +130,32 @@ These are returned by the API and displayed in the widget as the red `fieldError
 
 ## 4. Flows (summary)
 
-| Flow | What the user sees (widget) | What the user gets (SMS) |
+| Flow | What the user sees (widget) | What the user gets (SMS/MMS) |
 |------|----------------------------|--------------------------|
-| New RSVP success | "You're confirmed." + "Check your phone for a confirmation text." (+ optional flyer) | One confirmation: "You're confirmed for {event} on {date}. See you there! Reply STOP to opt out." |
-| Same phone RSVPs again | "You're already registered." / "See you there." | No SMS. |
+| First-ever RSVP + welcome on | "You're confirmed." + "Check your phone for a confirmation text." | Welcome MMS with contact card attachment |
+| First-ever RSVP + welcome off | "You're confirmed." + "Check your phone for a confirmation text." | Regular confirmation SMS |
+| Returning subscriber RSVPs | "You're confirmed." + "Check your phone for a confirmation text." | Regular confirmation SMS |
+| Same phone RSVPs again (same event) | "You're already registered." / "See you there." | No SMS. |
 | Admin one-off send | N/A (admin only) | Exactly the message the admin typed (to all or event-specific list, minus opt-outs). |
 | User replies STOP | N/A | No automated reply; number is added to opt_outs and excluded from future sends. |
 
 ---
 
-## 5. Default / “Thanks for RSVPing” wording
+## 5. Data model (subscribers vs. rsvps)
 
-- **SMS:** The only automatic SMS is the confirmation in §1.1. There is no separate "Thanks for RSVPing" message; that line is the confirmation itself ("You're confirmed for … See you there!").
-- **Widget:** The default success state is the "You're confirmed." screen plus the subtext "Check your phone for a confirmation text." There is no other default "confirmed" or "thanks" copy unless you add it.
+Two tables -- different jobs:
 
-If you want to change the confirmation SMS or the "You're confirmed" / "See you there" wording, say what you’d like and we can update this doc and the code together.
+- **`subscribers`** -- one row per unique phone, ever. Tracks: name, when they first joined (`created_at`), whether the welcome card was sent (`welcome_sent_at`). Powers the People tab.
+- **`rsvps`** -- one row per phone per event. Source of truth for "who RSVPed to what." Powers event-specific broadcasts and the event list under each person in the People tab. Never modified by the welcome feature.
+
+Event-specific broadcasts always query `rsvps WHERE event_id = X`. The `subscribers` table is never consulted for broadcast targeting.
+
+---
+
+## 6. Default wording
+
+- **SMS (confirmation):** The only automatic non-welcome SMS is the confirmation in section 1.2. There is no separate "Thanks for RSVPing" message; that line is the confirmation itself.
+- **MMS (welcome):** The welcome MMS in section 1.1 replaces the confirmation SMS for first-timers -- it is one message, not two. The default text includes both the welcome and the confirmation.
+- **Widget:** The default success state is the "You're confirmed." screen plus the subtext "Check your phone for a confirmation text." There is no other default copy unless you add it.
+
+If you want to change any message wording, say what you'd like and we can update this doc and the code together.

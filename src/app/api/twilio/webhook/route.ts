@@ -4,6 +4,14 @@ import { validateTwilioSignature } from '@/lib/twilio'
 import { notifyNewRsvp } from '@/lib/email'
 import { getSmsTemplate, interpolateSmsTemplate } from '@/lib/sms-confirmation-template'
 import { formatEventDateLong } from '@/lib/eventTimezone'
+import {
+  upsertSubscriber,
+  isFirstSubscriber,
+  getWelcomeSettings,
+  buildWelcomeBody,
+  markWelcomeSent,
+  getVCardUrl,
+} from '@/lib/welcome-vcard'
 
 function normalizePhone(raw: string): string {
   const digits = raw.replace(/\D/g, '')
@@ -14,6 +22,11 @@ function normalizePhone(raw: string): string {
 
 function twimlReply(message: string): NextResponse {
   const body = `<?xml version="1.0" encoding="UTF-8"?><Response><Message><![CDATA[${message}]]></Message></Response>`
+  return new NextResponse(body, { headers: { 'Content-Type': 'text/xml' } })
+}
+
+function twimlMmsReply(message: string, mediaUrl: string): NextResponse {
+  const body = `<?xml version="1.0" encoding="UTF-8"?><Response><Message><Body><![CDATA[${message}]]></Body><Media>${mediaUrl}</Media></Message></Response>`
   return new NextResponse(body, { headers: { 'Content-Type': 'text/xml' } })
 }
 
@@ -124,8 +137,34 @@ export async function POST(req: NextRequest) {
       console.error('RSVP notification email failed:', (err as Error).message?.slice(0, 120))
     )
 
+    // Ensure subscriber row exists (non-fatal)
+    await upsertSubscriber(phone, '')
+
+    const templateVars = { eventName: nextEvent.name, eventDate }
+    const firstTimer = await isFirstSubscriber(phone)
+
+    if (firstTimer) {
+      const welcome = await getWelcomeSettings()
+      if (welcome.enabled) {
+        // First-ever + welcome on: reply with MMS vCard attachment
+        try {
+          const welcomeBody = buildWelcomeBody(welcome.text, templateVars)
+          await markWelcomeSent(phone)
+          return twimlMmsReply(welcomeBody, getVCardUrl())
+        } catch (err) {
+          // If vCard URL fails (e.g. APP_URL missing in dev), fall back to plain SMS
+          console.error('Welcome MMS TwiML failed, falling back to SMS:', (err as Error).message?.slice(0, 80))
+        }
+      }
+      // Welcome off (or fallback): regular confirm SMS, leave welcome_sent_at NULL
+      const tmpl = await getSmsTemplate()
+      const confirmMsg = interpolateSmsTemplate(tmpl, templateVars)
+      return twimlReply(confirmMsg)
+    }
+
+    // Returning subscriber: regular confirmation SMS
     const tmpl = await getSmsTemplate()
-    const confirmMsg = interpolateSmsTemplate(tmpl, { eventName: nextEvent.name, eventDate })
+    const confirmMsg = interpolateSmsTemplate(tmpl, templateVars)
     return twimlReply(confirmMsg)
   }
 

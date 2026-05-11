@@ -60,6 +60,51 @@ create policy "events_public_read" on events
 -- rsvps and opt_outs: no direct client access; all writes/reads go through the
 -- backend API with the service role key. No policies needed for client access.
 
+-- subscribers: one row per unique phone number ever in the system.
+-- Canonical per-person record — separate from rsvps which tracks per-event attendance.
+-- welcome_sent_at: NULL means the welcome MMS + contact card has not been sent yet.
+-- Safe to add to an existing DB: purely additive, existing code unaffected.
+create table if not exists subscribers (
+  phone            text primary key,          -- normalized E.164
+  name             text not null default '',
+  created_at       timestamptz not null default now(),
+  welcome_sent_at  timestamptz               -- null = contact card not yet sent
+);
+alter table subscribers enable row level security;
+create index if not exists subscribers_welcome_idx on subscribers(welcome_sent_at);
+create index if not exists subscribers_phone_idx   on subscribers(phone);
+
+-- Welcome message settings — two new columns on app_settings.
+-- welcome_enabled: false = feature off, first-timers get regular confirm SMS.
+-- welcome_message_text: NULL means use the built-in default in code (same pattern as sms_confirm_template).
+alter table app_settings
+  add column if not exists welcome_enabled      boolean not null default false,
+  add column if not exists welcome_message_text text;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- ONE-TIME BACKFILL: run once in the Supabase SQL editor to seed subscribers
+-- from existing rsvps data. Safe to re-run (ON CONFLICT DO NOTHING).
+-- Past subscribers land with welcome_sent_at = NULL so the admin can reach them
+-- with a manual one-off broadcast from the Send tab when ready.
+-- ─────────────────────────────────────────────────────────────────────────────
+-- insert into subscribers (phone, name, created_at)
+-- select
+--   r1.phone,
+--   coalesce(
+--     (
+--       select r2.name from rsvps r2
+--       where r2.phone = r1.phone and r2.name != ''
+--       order by r2.created_at asc
+--       limit 1
+--     ),
+--     ''
+--   ) as name,
+--   min(r1.created_at) as created_at
+-- from rsvps r1
+-- group by r1.phone
+-- on conflict (phone) do nothing;
+-- ─────────────────────────────────────────────────────────────────────────────
+
 -- broadcast_log: one row per admin broadcast sent from the Send tab.
 -- Run in Supabase SQL editor if adding to an existing DB.
 create table if not exists broadcast_log (
