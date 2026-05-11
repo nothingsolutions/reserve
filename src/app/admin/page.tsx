@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatEventDate, formatEventTime, parsePickerToUtcIso } from '@/lib/eventTimezone'
@@ -230,8 +230,13 @@ export default function AdminPage() {
   const [tab, setTab] = useState<Tab>('events')
   const [events, setEvents] = useState<Event[]>([])
   const [people, setPeople] = useState<Person[]>([])
+  const [peopleTotal, setPeopleTotal] = useState(0)
+  const [peoplePage, setPeoplePage] = useState(1)
+  const [peopleSearch, setPeopleSearch] = useState('')
   const [loadingEvents, setLoadingEvents] = useState(false)
   const [loadingPeople, setLoadingPeople] = useState(false)
+  const [loadingMorePeople, setLoadingMorePeople] = useState(false)
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Send form
   const [sendTarget, setSendTarget] = useState('all')
@@ -307,23 +312,39 @@ export default function AdminPage() {
     }
   }, [router])
 
-  const fetchPeople = useCallback(async () => {
-    setLoadingPeople(true)
+  const fetchPeople = useCallback(async (opts: { page?: number; search?: string; append?: boolean } = {}) => {
+    const page = opts.page ?? 1
+    const search = opts.search ?? ''
+    const append = opts.append ?? false
+
+    if (append) {
+      setLoadingMorePeople(true)
+    } else {
+      setLoadingPeople(true)
+    }
+
     try {
-      const res = await fetch('/api/admin/people')
+      const qs = new URLSearchParams({ page: String(page), limit: '50' })
+      if (search) qs.set('search', search)
+      const res = await fetch(`/api/admin/people?${qs}`)
       if (res.status === 401) { router.push('/admin/login'); return }
       const data = await res.json()
-      if (Array.isArray(data)) setPeople(data)
+      if (data && Array.isArray(data.people)) {
+        setPeople((prev) => append ? [...prev, ...data.people] : data.people)
+        setPeopleTotal(data.total ?? 0)
+        setPeoplePage(page)
+      }
     } finally {
       setLoadingPeople(false)
+      setLoadingMorePeople(false)
     }
   }, [router])
 
   useEffect(() => { fetchEvents() }, [fetchEvents])
 
   useEffect(() => {
-    if (tab === 'people' && people.length === 0) fetchPeople()
-  }, [tab, people.length, fetchPeople])
+    if (tab === 'people' && people.length === 0 && peopleTotal === 0) fetchPeople()
+  }, [tab, people.length, peopleTotal, fetchPeople])
 
   useEffect(() => {
     if (tab === 'settings') fetchTemplate()
@@ -640,20 +661,68 @@ export default function AdminPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-xs uppercase tracking-widest text-white/30">
-                {people.length} unique attendee{people.length !== 1 ? 's' : ''}
+                {peopleTotal > 0
+                  ? people.length < peopleTotal
+                    ? `Showing ${people.length} of ${peopleTotal} attendee${peopleTotal !== 1 ? 's' : ''}`
+                    : `${peopleTotal} attendee${peopleTotal !== 1 ? 's' : ''}`
+                  : loadingPeople
+                    ? ''
+                    : '0 attendees'}
               </p>
               <button
-                onClick={fetchPeople}
+                onClick={() => {
+                  setPeopleSearch('')
+                  setPeoplePage(1)
+                  setPeople([])
+                  setPeopleTotal(0)
+                  fetchPeople({ page: 1, search: '' })
+                }}
                 disabled={loadingPeople}
                 className="text-xs text-white/30 hover:text-white/60 transition-colors"
               >
                 {loadingPeople ? 'Loading…' : 'Refresh'}
               </button>
             </div>
+
+            {/* Search */}
+            <input
+              type="text"
+              value={peopleSearch}
+              onChange={(e) => {
+                const val = e.target.value
+                setPeopleSearch(val)
+                if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+                searchDebounceRef.current = setTimeout(() => {
+                  setPeople([])
+                  setPeopleTotal(0)
+                  setPeoplePage(1)
+                  fetchPeople({ page: 1, search: val })
+                }, 400)
+              }}
+              placeholder="Search by name or phone…"
+              className="w-full bg-transparent border border-white/20 rounded-sm px-3 py-2 text-white placeholder-white/20 focus:outline-none focus:border-white/50 text-sm transition-colors"
+            />
+
             {people.length === 0 && !loadingPeople && (
-              <p className="text-white/30 text-sm py-4 text-center">No RSVPs yet.</p>
+              <p className="text-white/30 text-sm py-4 text-center">
+                {peopleSearch ? 'No results.' : 'No RSVPs yet.'}
+              </p>
             )}
             {people.map((p) => <PersonCard key={p.phone} person={p} />)}
+
+            {/* Load more */}
+            {people.length < peopleTotal && (
+              <button
+                onClick={() => {
+                  const nextPage = peoplePage + 1
+                  fetchPeople({ page: nextPage, search: peopleSearch, append: true })
+                }}
+                disabled={loadingMorePeople}
+                className="w-full py-2.5 border border-white/20 text-white/40 text-xs uppercase tracking-widest rounded-sm hover:border-white/40 hover:text-white/70 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {loadingMorePeople ? 'Loading…' : `Load more (${peopleTotal - people.length} remaining)`}
+              </button>
+            )}
           </div>
         )}
 
